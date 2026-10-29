@@ -26,22 +26,21 @@ const target = "public/ocr/lang/eng.traineddata.gz";
 try {
   await access(target);
 } catch {
-  try {
-    await copyFile(
-      "/workspace/epubchrome-setup/models/eng.traineddata.gz",
-      target,
-    );
-  } catch {
-    execFileSync("curl", [
-      "--fail",
-      "--location",
-      "--silent",
-      "--show-error",
-      "https://raw.githubusercontent.com/naptha/tessdata/gh-pages/4.0.0/eng.traineddata.gz",
-      "-o",
-      target,
-    ]);
-  }
+  execFileSync("curl", [
+    "--fail",
+    "--location",
+    "--silent",
+    "--show-error",
+    "--connect-timeout",
+    "20",
+    "--max-time",
+    "180",
+    "--retry",
+    "2",
+    "https://raw.githubusercontent.com/naptha/tessdata/gh-pages/4.0.0/eng.traineddata.gz",
+    "-o",
+    target,
+  ]);
 }
 execFileSync("python3", ["scripts/demo.py"]);
 

@@ -31,5 +31,17 @@
     "typescript": "7.0.2",
     "vite": "8.3.5",
     "wxt": "0.21.5"
+  },
+  "description": "A local-first Chrome EPUB reader with bookmarks, highlights, on-device printed-text OCR and PDF printing.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/captainprice24/EPUBchrome.git"
+  },
+  "homepage": "https://github.com/captainprice24/EPUBchrome#readme",
+  "bugs": {
+    "url": "https://github.com/captainprice24/EPUBchrome/issues"
+  },
+  "engines": {
+    "node": ">=24 <25"
   }
 }

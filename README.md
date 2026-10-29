@@ -1,84 +1,106 @@
-# EPUBchrome
-tool for reading epubs in Chrome and exporting them to pdf.
+<div align="center">
 
 # Folio · EPUBchrome
 
-A local-first Chrome extension for reading DRM-free EPUBs. Built with TypeScript, React, WXT, zip.js, Dexie and Tesseract.js.
+**Your books. Your notes. Your reading room.**
 
-## What works
+A local-first Chrome extension for reading EPUBs, saving the passages that matter, and taking your reading to paper.
 
-- Import local EPUBs with a file picker or drag and drop. The original file is never rewritten.
-- EPUB 2 NCX and EPUB 3 navigation, spine-based chapter reading, publisher page lists when present, relative styles, images and embedded fonts.
-- Persistent local library, chapter/scroll restoration, chapter bookmarks, text highlights, annotation navigation and JSON note export.
-- Reader font sizing, dark theme, current-chapter text search and keyboard chapter navigation.
-- Printed-English OCR on chapter images, entirely local with bundled workers, WASM and language data. OCR results are separate local records; recognized text can be downloaded.
-- Current-chapter or full-book print layout. Choose **Save as PDF** in Chrome's print dialog. Original image resources are used; text remains text. Export stops rather than silently printing a chapter with missing images.
-- Optional authenticated Google Drive EPUB download, streamed to temporary browser storage. Requires the OAuth setup below.
+![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-385546)
+![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest_V3-70865b)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
+[![Build and test](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml)
 
-This is version 0.1, not a guarantee of perfect compatibility with every EPUB. An original sample book is included.
+[Get started](#get-started) · [Features](#features) · [Google Drive](docs/GOOGLE_DRIVE.md) · [Contribute](CONTRIBUTING.md) · [Research](docs/RESEARCH.md)
 
-## Develop and build
+</div>
 
-Node 24 and npm are used in the prepared environment. Python 3 generates the sample EPUB. `curl` is needed only when the bundled language model must be downloaded on a fresh machine.
+![Folio library with EPUB import and an included sample book](docs/images/library.png)
+
+## Read at your own pace
+
+Bring in a DRM-free EPUB from your computer, follow its chapters, and save bookmarks and highlights. Your library and notes live in your browser. The included **The Quiet Atlas** sample is an original short read, so you can try Folio immediately.
+
+![Folio reader showing a saved text highlight and chapter navigation](docs/images/reader.png)
+
+## Features
+
+| Feature | Available in v0.1 |
+| --- | --- |
+| Local EPUB library | File picker, drag and drop, title/author search, sorting and removal |
+| Chapter navigation | EPUB 3 contents, EPUB 2 NCX, spine order and publisher page lists when supplied |
+| Reading tools | Font sizing, dark mode, chapter search and reading-position restoration |
+| Bookmarks and highlights | Persistent annotations, navigation and JSON note export |
+| On-device OCR | Printed English in chapter images; bundled worker, WASM and model; text download |
+| PDF printing | Current chapter or whole book through Chrome’s **Save as PDF** dialog |
+| Google Drive | File-link import after configuring a Google OAuth client; live-account validation pending |
+
+**This is an early development build.** Handwriting recognition, accurate native fixed-layout rendering, automated PDF conversion and verified very-large-book performance are still future work. The 1 GB input ceiling is a safety limit, not a performance guarantee. See [current limits](docs/INSTALLATION.md#current-limits) and [validation coverage](docs/VALIDATION.md).
+
+## Get started
+
+You need **Node.js 24.x**, npm, Python 3 (`python3`) and `curl` on your development machine. On Windows, use WSL for the build commands; the resulting extension can be loaded in Windows Chrome.
 
 ```sh
+git clone https://github.com/captainprice24/EPUBchrome.git
+cd EPUBchrome
 npm ci
-npm run typecheck
 npm run build
 ```
 
-Load the generated `.output/chrome-mv3` directory using **Chrome → Extensions → Developer mode → Load unpacked**. Pin Folio and click its toolbar icon to open the reading room. Files from your PC or Mac can be selected in the app without granting broad access to `file://` URLs.
+Installation downloads approximately 11 MB of English OCR model data, verifies its pinned SHA-256 digest, and packages the OCR code locally. After building, local reading and OCR do not need a network connection.
 
-```sh
-npm run dev
-```
+1. Open `chrome://extensions` in Chrome.
+2. Turn on **Developer mode**, then choose **Load unpacked**.
+3. Select the `.output/chrome-mv3` folder inside the project.
+4. Pin **Folio** and click its toolbar icon.
+5. Choose **Import a book**, drop an EPUB into the app, or open the included sample.
 
-WXT's development mode starts its development browser. For a plain browser view of the production UI, run `node scripts/serve.mjs`; this mode does not provide Chrome extension APIs or Drive sign-in.
+The app itself does not require a server, a Google account or an OCR subscription for local files.
 
-The current cloud Chromium has an administrator policy that blocks unpacked extensions. The browser tests therefore exercise the built reader using HTTP and an extension-equivalent script CSP. The real Chrome toolbar/OAuth integration still requires testing in Chrome that permits development extensions. The policy has not been bypassed.
-
-## Google Drive setup
-
-1. Create a Google Cloud project and enable the Google Drive API.
-2. Configure an OAuth consent screen and test users. Create an OAuth client for a **Chrome extension**, associated with the stable installed extension ID.
-3. Copy `.env.example` to `.env`, set `WXT_GOOGLE_CLIENT_ID` to the public client ID, and rebuild. Use a stable extension signing key/ID across OAuth testing and distribution; do not commit a private signing key.
-4. Open Folio, choose **Open from Drive**, paste a Drive file link or ID, and sign in.
-
-This implementation uses `chrome.identity.getAuthToken` and `drive.readonly` to download an arbitrary existing EPUB link. That scope is broader than per-file access and can require Google's verification before public distribution. Per-file `drive.file` with a compatible Picker flow is a future improvement. No Drive write access is requested. No OAuth client secret belongs in the extension. No credentials are included in this repository. Drive sign-in and downloads have not been verified against a live configured Google account in this cloud session.
-
-## Validation
-
-```sh
-npm run build
-npm test
-```
-
-Tests use Playwright and `/usr/bin/chromium`. Override `CHROMIUM_PATH` if your local Chromium is elsewhere. The suite starts/stops its own local test server. It verifies chapter navigation, persistence across reload, bookmarks/highlights, malicious-content isolation, malformed EPUB recovery, **browser** OCR with locally packaged assets, print-layout preparation, deletion, search, narrow-screen layout and the browser-preview Drive error path.
-
-The test PDF byte check verifies Chromium can produce a PDF; it does not establish pixel-perfect export fidelity or accessibility conformance. Security tests cover representative malicious markup, not a complete security audit. No production handwriting, large-book performance or target-OS conformance claim is made.
-
-## Limits and privacy
-
-- The first version supports DRM-free EPUBs up to a **1 GB compressed input safety ceiling**, not a proven 1 GB performance guarantee. Limits: 30,000 ZIP entries, 2 GB declared expanded size, 64 MB per extracted entry and 128 MB loaded resource budget. Books with very large individual chapters may be rejected.
-- Reading is chapter-based and scrollable. Reflowable EPUBs have no universal printed page count. Native fixed-layout viewport fidelity, advanced SVG/media, scripted content, nested CSS imports and every EPUB styling feature are not implemented.
-- Full-book print is limited to 300 chapters and 16 MB assembled markup; decoded image memory can be much larger. Prefer individual chapters for image-heavy books. The source EPUB remains unchanged. This version does not embed highlights or OCR text layers in exported PDFs, guarantee font embedding rights, or produce certified PDF/A/PDF/UA.
-- OCR currently supports printed English and images below 40 megapixels. Handwriting, automatic page-wide OCR, multilingual models and confidence correction workflows require further development. Do not rely on OCR without reviewing the output.
-- Books, annotations and OCR records are in this browser's IndexedDB. Browser data removal, uninstalling the extension, profile changes or storage eviction can remove them. Use **Export notes** and keep original EPUB files. Notes export is a portable record; importing backups is not implemented yet.
-- Book scripts, forms, frames and external resource URLs are blocked. Chapters render in a script-disabled sandbox with a restrictive resource CSP. No analytics or telemetry are included. Only Google Drive import connects to Google when requested. The bundled OCR model means recognition requires no remote service.
-- The extension is not an operating system default file handler and does not remove DRM.
-
-## Architecture and research
-
-`src/epub.ts` handles bounded archive access, EPUB parsing and isolated resource rendering. `src/store.ts` stores the library and separate annotations. `src/annotations.ts` maps text ranges to chapter offsets; locators are specific to the unchanged imported book. `src/drive.ts` handles identity and downloads. `src/App.tsx` implements the library and reader.
-
-[Preimplementation research](docs/RESEARCH.md) compares readers, rendering engines, OCR, conversion approaches, languages and REA. This version uses a small chapter renderer; it does not integrate Foliate.js or Readium yet. No Rust or backend service is required. REA remains an optional external research tool and is not shipped with the extension.
-
-Generated OCR assets are copied during installation from pinned npm packages. The English model is downloaded from the documented upstream and checked against a pinned SHA-256 digest. See `THIRD_PARTY_NOTICES.md`.
-
-To produce a portable ZIP of the unpacked extension:
+### Make a portable build
 
 ```sh
 npm run package
 ```
 
-Unzip `.output/folio-0.1.0-chrome.zip`, then load the extracted folder as an unpacked extension. The ZIP is a development build, not a Chrome Web Store publication. See [validation details](docs/VALIDATION.md).
+This creates `.output/folio-0.1.0-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
+
+### Develop and test
+
+```sh
+npm run dev          # WXT development browser
+npm run typecheck    # Strict TypeScript checks
+npm run build        # Production Chrome MV3 build
+npm test             # Seven browser integration tests
+```
+
+Browser tests require Chromium. Set `CHROMIUM_PATH` to its executable, or follow the [test setup instructions](CONTRIBUTING.md#browser-tests). GitHub Actions builds and tests the app and is configured to upload an extension ZIP after successful checks; workflow results appear in the **Actions** tab.
+
+## Google Drive
+
+Drive import is optional. It needs a public OAuth client ID associated with the extension’s stable ID, a consent screen and an enabled Drive API. No OAuth client secret belongs in the extension.
+
+Follow the [Google Drive configuration guide](docs/GOOGLE_DRIVE.md). The current implementation requests read-only Drive access and has not yet been tested with a live configured account.
+
+## Privacy and document safety
+
+- Original EPUBs are never rewritten; annotations and OCR results are stored separately.
+- Local reading and OCR run in your browser. No analytics or telemetry are included.
+- Imported scripts, forms, frames and external resource URLs are blocked.
+- Browser data removal or uninstalling Folio can delete the local library. Keep your original EPUBs and export your notes.
+
+See the [privacy guide](docs/PRIVACY.md) for storage, permissions and data-loss considerations.
+
+## Project guide
+
+| Guide | Contents |
+| --- | --- |
+| [Installation and troubleshooting](docs/INSTALLATION.md) | Loading the extension, printing, OCR, packaging and supported limits |
+| [Google Drive setup](docs/GOOGLE_DRIVE.md) | OAuth configuration, extension identity and permissions |
+| [Contributing](CONTRIBUTING.md) | Development commands, testing and source layout |
+| [Validation](docs/VALIDATION.md) | What was tested and what remains unverified |
+| [Engineering research](docs/RESEARCH.md) | Reader, OCR and PDF references; language decisions; REA investigation plan |
+| [Third-party notices](THIRD_PARTY_NOTICES.md) | Dependency attribution and OCR model provenance |
+
+Built with **TypeScript, React, WXT, zip.js, Dexie and Tesseract.js**. Rust/WASM modules and a Python OCR backend are research options; neither is required by the app. A project source-code license has not been selected; third-party components retain their own licenses.

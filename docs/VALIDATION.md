@@ -15,3 +15,9 @@ Automated coverage:
 `npm run typecheck`, `npm run build`, and `npm test` are the required checks. The application dependency audit reported no known advisories during development. This does not certify the code's security or all possible documents.
 
 Not covered: a live Google account, extension-origin runtime, Windows/macOS Chrome, EPUB conformance corpus, actual 1 GB performance, handwriting/multilingual accuracy, print color/font fidelity, PDF/A/PDF/UA, or DRM-protected files. The 1 GB input limit is a safety ceiling, not a performance claim.
+
+## Reproducibility check
+
+The repository audit also tested the proposed source tree in a fresh temporary directory, without dependencies or generated OCR files from the working checkout. `npm ci` downloaded and verified the English model from its documented upstream. TypeScript checks, the production build, all seven browser tests and ZIP packaging passed there. A dummy public OAuth client ID in `.env` was verified in the generated manifest; this checks configuration loading only, not live Google sign-in.
+
+The GitHub Actions workflow in `.github/workflows/ci.yml` installs its own Chromium, builds the app, runs the suite and uploads the extension ZIP on success. Local validation does not establish that a remote Actions run has completed; consult the repository’s Actions tab for that status.

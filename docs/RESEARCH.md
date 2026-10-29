@@ -1,5 +1,7 @@
 # EPUBchrome: engineering research and development decisions
 
+> **Historical planning document.** This research predates the v0.1 application. See the [README](../README.md) for implemented features and [validation coverage](VALIDATION.md) for current evidence. Local tooling paths and raw-document archives mentioned below belong to the onboarding workspace; they are not additional files required to build this repository.
+
 Research date: 29 October 2026. Scope: first-stage Chrome extension for local and Google Drive EPUBs, navigation, annotations, OCR and PDF export. This is a source-backed architecture investigation, not a claim that these features have been implemented. Upstream documentation was retrieved into `research/`; most URLs use mutable HEAD. Research describes the retrieved versions rather than establishing ongoing maintenance or benchmark results.
 
 ## Decisions on languages and tools
