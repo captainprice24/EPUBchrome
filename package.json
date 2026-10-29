@@ -1,0 +1,35 @@
+{
+  "name": "epubchrome",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "test": "playwright test",
+    "prepare:assets": "node scripts/assets.mjs",
+    "postinstall": "node scripts/assets.mjs",
+    "package": "npm run build && python3 scripts/package.py",
+    "format": "prettier --write src entrypoints tests scripts/*.mjs *.ts *.json"
+  },
+  "dependencies": {
+    "@zip.js/zip.js": "2.24.0",
+    "dexie": "4.4.7",
+    "dompurify": "3.4.17",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tesseract.js": "7.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/chrome": "0.3.7",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "prettier": "3.6.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "wxt": "0.21.5"
+  }
+}
