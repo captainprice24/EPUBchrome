@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useMemo,
   useEffect,
   useRef,
   useState,
@@ -20,6 +21,16 @@ import { Epub, readerDocument, type Rendered } from "./epub";
 import { applyHighlights, selectionOffsets } from "./annotations";
 import { driveImport } from "./drive";
 import { Icon } from "./icons";
+import {
+  Paginator,
+  ChapterCounter,
+  createReadingDocument,
+  layoutKey,
+  type ReadingSettings,
+  type ReadingMode,
+  type ReadingTheme,
+  type PageSnapshot,
+} from "./reader";
 function Modal({
   title,
   children,
@@ -153,25 +164,69 @@ export function App() {
   const [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
-    [modal, setModal] = useState<"drive" | "print" | "ocr" | "delete" | null>(
-      null,
-    ),
+    [modal, setModal] = useState<
+      "drive" | "print" | "ocr" | "delete" | "reading" | null
+    >(null),
     [deleteId, setDeleteId] = useState<string | null>(null);
   const [chapter, setChapter] = useState(0),
     [engine, setEngine] = useState<Epub | null>(null),
     [rendered, setRendered] = useState<Rendered | null>(null),
     [chapterLoading, setChapterLoading] = useState(false),
     [tab, setTab] = useState("contents"),
-    [sidebar, setSidebar] = useState(true),
+    [sidebar, setSidebar] = useState(() => window.innerWidth > 760),
     [selection, setSelection] =
       useState<ReturnType<typeof selectionOffsets>>(null),
     [find, setFind] = useState("");
-  const [font, setFont] = useState(
-      () => Number(localStorage.getItem("folio-font")) || 19,
+  const [font, setFont] = useState(() =>
+    Math.max(
+      14,
+      Math.min(36, Number(localStorage.getItem("folio-font")) || 22),
     ),
-    [dark, setDark] = useState(
-      () => localStorage.getItem("folio-dark") === "true",
-    );
+  );
+  const [mode, setMode] = useState<ReadingMode>(() =>
+    localStorage.getItem("folio-reading-mode") === "vertical"
+      ? "vertical"
+      : "horizontal",
+  );
+  const [fontChoice, setFontChoice] = useState<ReadingSettings["font"]>(() => {
+    const f = localStorage.getItem("folio-reading-font");
+    return f === "classic" || f === "modern" ? f : "literary";
+  });
+  const [spacing, setSpacing] = useState(() => {
+    const n = Number(localStorage.getItem("folio-spacing"));
+    return [1.4, 1.7, 2].includes(n) ? n : 1.7;
+  });
+  const [margin, setMargin] = useState<ReadingSettings["margin"]>(() => {
+    const v = localStorage.getItem("folio-margin");
+    return v === "narrow" || v === "wide" ? v : "comfortable";
+  });
+  const [theme, setTheme] = useState<ReadingTheme>(() => {
+    const t = localStorage.getItem("folio-theme");
+    return t === "sepia" || t === "night"
+      ? t
+      : localStorage.getItem("folio-dark") === "true"
+        ? "night"
+        : "paper";
+  });
+  const dark = theme === "night";
+  const settings = useMemo<ReadingSettings>(
+    () => ({
+      mode,
+      size: font,
+      font: fontChoice,
+      lineHeight: spacing,
+      margin,
+      theme,
+    }),
+    [mode, font, fontChoice, spacing, margin, theme],
+  );
+  const [pageInfo, setPageInfo] = useState<PageSnapshot | null>(null);
+  const [dimensions, setDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [chapterCounts, setChapterCounts] = useState<number[]>([]);
+  const [counting, setCounting] = useState(false);
   const [driveLink, setDriveLink] = useState(""),
     [driveBusy, setDriveBusy] = useState(""),
     [printScope, setPrintScope] = useState("chapter");
@@ -190,7 +245,12 @@ export function App() {
     ocrCanceled = useRef(false),
     ocrJob = useRef(0),
     printAbort = useRef<AbortController | null>(null),
-    position = useRef(0);
+    position = useRef(0),
+    textOffset = useRef<number | undefined>(undefined),
+    requestedPage = useRef<number | "last" | undefined>(undefined),
+    paginator = useRef<Paginator | null>(null),
+    countsKey = useRef(""),
+    countsRef = useRef<number[]>([]);
   const active = books.find((b) => b.id === selectedId);
   const bookMarks = marks.filter((m) => m.bookId === selectedId);
   const currentMarks = bookMarks.filter((m) => m.chapter === chapter);
@@ -208,7 +268,15 @@ export function App() {
   useEffect(() => {
     localStorage.setItem("folio-font", String(font));
     localStorage.setItem("folio-dark", String(dark));
-  }, [font, dark]);
+    localStorage.setItem("folio-reading-mode", mode);
+    localStorage.setItem("folio-reading-font", fontChoice);
+    localStorage.setItem("folio-spacing", String(spacing));
+    localStorage.setItem("folio-margin", margin);
+    localStorage.setItem("folio-theme", theme);
+  }, [font, dark, mode, fontChoice, spacing, margin, theme]);
+  useEffect(() => {
+    paginator.current?.configure(settings);
+  }, [settings]);
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(""), 4500);
@@ -221,6 +289,14 @@ export function App() {
     },
     [],
   );
+  useEffect(() => {
+    const narrow = window.matchMedia("(max-width:760px)");
+    const change = () => {
+      if (narrow.matches) setSidebar(false);
+    };
+    narrow.addEventListener("change", change);
+    return () => narrow.removeEventListener("change", change);
+  }, []);
   const importFile = async (file: File) => {
     if (file.size > 1024 ** 3) {
       setError("This version supports EPUB files up to 1 GB.");
@@ -310,6 +386,8 @@ export function App() {
         Math.max(0, Math.min(book.chapter, parser.chapters.length - 1)),
       );
       position.current = book.position || 0;
+      textOffset.current = book.textOffset;
+      requestedPage.current = undefined;
       engineId.current = selectedId;
       setEngine(parser);
       setBusy("");
@@ -322,6 +400,8 @@ export function App() {
     });
     return () => {
       canceled = true;
+      paginator.current?.destroy();
+      paginator.current = null;
       if (parser) void parser.close().catch(() => {});
       setSelection(null);
     };
@@ -331,6 +411,9 @@ export function App() {
     const seq = ++loadSequence.current;
     const controller = new AbortController();
     let cancel = false;
+    paginator.current?.destroy();
+    paginator.current = null;
+    setPageInfo(null);
     setChapterLoading(true);
     setSelection(null);
     setRendered(null);
@@ -365,22 +448,29 @@ export function App() {
         doc,
         currentMarks.filter((m) => m.kind === "highlight"),
       );
+    paginator.current?.refresh();
   }, [marks, chapter]);
-  function navigate(index: number, anchor?: string) {
+  function navigate(index: number, anchor?: string, last = false) {
     if (!engine) return;
     const next = Math.max(0, Math.min(index, engine.chapters.length - 1));
     setSelection(null);
     position.current = 0;
+    textOffset.current = undefined;
+    requestedPage.current = last ? "last" : undefined;
     jump.current = anchor || null;
     if (next === chapter && frame.current?.contentDocument) {
-      if (anchor)
-        frame.current.contentDocument
-          .querySelector(
+      const target = anchor
+        ? frame.current.contentDocument.querySelector(
             `[data-folio="${CSS.escape(anchor)}"],#${CSS.escape(anchor)}`,
           )
-          ?.scrollIntoView({ block: "center" });
-      else frame.current.contentWindow?.scrollTo(0, 0);
+        : null;
+      if (target) paginator.current?.goToElement(target);
+      else paginator.current?.goToPage(last ? Number.MAX_SAFE_INTEGER : 1);
+      jump.current = null;
     } else setChapter(next);
+  }
+  function turnPage(direction: number) {
+    paginator.current?.turn(direction);
   }
   function goHref(href: string) {
     if (!engine) return;
@@ -392,48 +482,74 @@ export function App() {
   }
   function loaded() {
     const doc = frame.current?.contentDocument;
-    if (!doc) return;
-    const savedPosition = position.current;
-    const pendingJump = jump.current;
+    if (!doc || !active || !engine) return;
     const seq = loadSequence.current;
+    const bookId = active.id;
+    const chapterIndex = chapter;
+    const savedJump = jump.current;
+    jump.current = null;
     applyHighlights(
       doc,
       currentMarks.filter((m) => m.kind === "highlight"),
     );
-    if (jump.current) {
-      const mark =
-        doc.querySelector(`[data-folio="${CSS.escape(jump.current)}"]`) ||
-        doc.getElementById(jump.current);
-      mark?.scrollIntoView({ block: "center" });
-      jump.current = null;
-    }
-    if (!pendingJump)
-      requestAnimationFrame(() => {
-        doc.defaultView?.scrollTo(
-          0,
-          savedPosition *
-            Math.max(
-              0,
-              doc.documentElement.scrollHeight -
-                (doc.defaultView?.innerHeight || 0),
-            ),
+    paginator.current?.destroy();
+    const controller = new Paginator(doc, settings, {
+      offset: textOffset.current,
+      progress: position.current,
+      page: requestedPage.current,
+      onBoundary: (direction) => {
+        if (direction < 0 && chapterIndex > 0)
+          navigate(chapterIndex - 1, undefined, true);
+        if (direction > 0 && chapterIndex < engine.chapters.length - 1)
+          navigate(chapterIndex + 1);
+      },
+      onChange: (s) => {
+        if (seq !== loadSequence.current) return;
+        position.current = s.progress;
+        textOffset.current = s.offset;
+        setPageInfo(s);
+        const { width, height } = doc
+          .getElementById("folio-viewport")!
+          .getBoundingClientRect();
+        setDimensions((d) =>
+          d?.width === width && d.height === height ? d : { width, height },
         );
-      });
-    let scrollTimer: ReturnType<typeof setTimeout>;
-    doc.defaultView?.addEventListener("scroll", () => {
-      position.current =
-        (doc.defaultView?.scrollY || 0) /
-        Math.max(
-          1,
-          doc.documentElement.scrollHeight -
-            (doc.defaultView?.innerHeight || 0),
-        );
-      clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(() => {
-        if (active && seq === loadSequence.current)
-          void db.books.update(active.id, { position: position.current });
-      }, 400);
+        if (countsKey.current !== s.key) {
+          countsKey.current = s.key;
+          countsRef.current = Array(engine.chapters.length).fill(0);
+        }
+        if (countsRef.current[chapterIndex] !== s.pages) {
+          const counts = [...countsRef.current];
+          counts[chapterIndex] = s.pages;
+          countsRef.current = counts;
+          setChapterCounts(counts);
+        }
+        void db.books
+          .update(bookId, {
+            chapter: chapterIndex,
+            position: s.progress,
+            textOffset: s.offset,
+            page: s.page,
+            pageCount: s.pages,
+            readingMode: doc.documentElement.dataset.readingMode as ReadingMode,
+          })
+          .catch((e) => setError(message(e)));
+      },
     });
+    paginator.current = controller;
+    void controller
+      .start()
+      .then(() => {
+        if (seq !== loadSequence.current) return;
+        if (savedJump) {
+          const target =
+            doc.querySelector(`[data-folio="${CSS.escape(savedJump)}"]`) ||
+            doc.getElementById(savedJump);
+          if (target) controller.goToElement(target);
+        }
+        requestedPage.current = undefined;
+      })
+      .catch((e) => setError(message(e)));
     doc.addEventListener("mouseup", () => setSelection(selectionOffsets(doc)));
     doc.addEventListener("keyup", () => setSelection(selectionOffsets(doc)));
     doc.addEventListener("click", (e) => {
@@ -444,23 +560,115 @@ export function App() {
         if (href) goHref(href);
       }
     });
-    doc.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        navigate(chapter + 1);
-      }
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        navigate(chapter - 1);
-      }
-    });
   }
+  useEffect(() => {
+    if (
+      !selectedId ||
+      !engine ||
+      engineId.current !== selectedId ||
+      !dimensions
+    )
+      return;
+    const key = layoutKey(settings, dimensions.width, dimensions.height);
+    let canceled = false;
+    const abort = new AbortController();
+    let parser: Epub | undefined;
+    const counter = new ChapterCounter(dimensions.width, dimensions.height);
+    setCounting(true);
+    void (async () => {
+      const book = await db.books.get(selectedId);
+      if (!book || canceled) return;
+      const cached = book.pagination?.key === key ? book.pagination.counts : [];
+      const values = engine.chapters.map((_, i) =>
+        countsKey.current === key && countsRef.current[i]
+          ? countsRef.current[i]!
+          : cached[i] || 0,
+      );
+      countsKey.current = key;
+      countsRef.current = values;
+      setChapterCounts(values);
+      parser = new Epub(book.blob);
+      await parser.open();
+      for (let i = 0; i < engine.chapters.length; i++) {
+        if (canceled) break;
+        if (countsRef.current[i] || parser.chapterSize(i) > 2 * 1024 * 1024)
+          continue;
+        await new Promise<void>((resolve) => setTimeout(resolve, 35));
+        if (canceled) break;
+        parser.releaseResources();
+        try {
+          const rendered = await parser.render(i, abort.signal);
+          const pages = await counter.count(
+            rendered.html,
+            settings,
+            abort.signal,
+          );
+          if (canceled) break;
+          const counts = [...countsRef.current];
+          counts[i] = pages;
+          countsRef.current = counts;
+          setChapterCounts(counts);
+        } catch {
+          if (canceled) break;
+        }
+      }
+      if (!canceled && countsKey.current === key)
+        await db.books.update(selectedId, {
+          pagination: { key, counts: countsRef.current },
+        });
+    })()
+      .catch(() => {
+        /* Counting is optional; the open chapter always has a measured count. */
+      })
+      .finally(() => {
+        counter.destroy();
+        void parser?.close().catch(() => {});
+        if (!canceled) setCounting(false);
+      });
+    return () => {
+      canceled = true;
+      abort.abort();
+      counter.destroy();
+      void parser?.close().catch(() => {});
+    };
+  }, [engine, selectedId, dimensions, settings]);
+  useEffect(() => {
+    if (!selectedId || modal) return;
+    const key = (e: KeyboardEvent) => {
+      if (
+        (e.target as Element).closest("input,textarea,select,button") ||
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey
+      )
+        return;
+      if (["ArrowRight", "PageDown"].includes(e.key)) {
+        e.preventDefault();
+        turnPage(1);
+      } else if (["ArrowLeft", "PageUp"].includes(e.key)) {
+        e.preventDefault();
+        turnPage(-1);
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [selectedId, modal, chapter]);
+  const currentBookmark = currentMarks.find(
+    (m) =>
+      m.kind === "bookmark" &&
+      pageInfo &&
+      (m.textOffset !== undefined
+        ? paginator.current?.pageForOffset(m.textOffset) === pageInfo.page
+        : 1 + Math.round((m.position || 0) * (pageInfo.pages - 1)) ===
+          pageInfo.page),
+  );
   const addBookmark = async () => {
     if (!active || !engine) return;
-    const existing = currentMarks.find((m) => m.kind === "bookmark");
+    const existing = currentBookmark;
     if (existing) {
-      setTab("bookmarks");
-      setNotice("This chapter is already bookmarked.");
+      await db.marks.delete(existing.id);
+      await refresh();
+      setNotice("Bookmark removed.");
       return;
     }
     await db.marks.add({
@@ -469,7 +677,11 @@ export function App() {
       chapter,
       chapterTitle: engine.chapters[chapter]!.title,
       kind: "bookmark",
-      text: engine.chapters[chapter]!.title,
+      text: `Page ${pageInfo?.page || 1} · ${engine.chapters[chapter]!.title}`,
+      textOffset: pageInfo?.offset,
+      page: pageInfo?.page,
+      pageCount: pageInfo?.pages,
+      readingMode: mode,
       position: position.current,
       created: Date.now(),
     });
@@ -504,6 +716,8 @@ export function App() {
         .update(mark.bookId, {
           chapter: mark.chapter,
           position: mark.position || 0,
+          textOffset: mark.textOffset,
+          page: mark.page,
         })
         .then(() => {
           setChapter(mark.chapter);
@@ -513,16 +727,15 @@ export function App() {
       navigate(mark.chapter, mark.kind === "highlight" ? mark.id : undefined);
       if (mark.kind === "bookmark") {
         position.current = mark.position || 0;
+        textOffset.current = mark.textOffset;
         if (mark.chapter === chapter) {
-          const doc = frame.current?.contentDocument;
-          doc?.defaultView?.scrollTo(
-            0,
-            position.current *
-              Math.max(
-                0,
-                doc.documentElement.scrollHeight - doc.defaultView.innerHeight,
-              ),
-          );
+          if (mark.textOffset !== undefined)
+            paginator.current?.goToOffset(mark.textOffset);
+          else
+            paginator.current?.goToPage(
+              1 +
+                Math.round((mark.position || 0) * ((pageInfo?.pages || 1) - 1)),
+            );
         }
       }
     }
@@ -723,7 +936,8 @@ export function App() {
         r.setEnd(node, at + find.length);
         doc.getSelection()?.removeAllRanges();
         doc.getSelection()?.addRange(r);
-        node.parentElement?.scrollIntoView({ block: "center" });
+        if (node.parentElement)
+          paginator.current?.goToElement(node.parentElement);
         setSelection(selectionOffsets(doc));
         return;
       }
@@ -752,7 +966,7 @@ export function App() {
     void fn().catch((e) => setError(message(e)));
   return (
     <div
-      className={`app ${selectedId ? "reading" : ""} ${dark && selectedId ? "night" : ""}`}
+      className={`app ${selectedId ? "reading" : ""} ${dark && selectedId ? "night" : ""} ${theme === "sepia" && selectedId ? "sepia" : ""}`}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -996,12 +1210,15 @@ export function App() {
                         <div className="book-progress">
                           <span
                             style={{
-                              width: `${Math.round(((book.chapter + 1) / book.chapterCount) * 100)}%`,
+                              width: `${Math.round(((book.chapter + (book.page && book.pageCount ? book.page / book.pageCount : 1)) / book.chapterCount) * 100)}%`,
                             }}
                           />
                         </div>
                         <span className="book-detail">
-                          Chapter {book.chapter + 1} of {book.chapterCount}
+                          Ch. {book.chapter + 1}
+                          {book.page
+                            ? ` · Page ${book.page} of ${book.pageCount || "—"}`
+                            : ` of ${book.chapterCount}`}
                           <span>{bytes(book.size)}</span>
                         </span>
                       </div>
@@ -1196,6 +1413,14 @@ export function App() {
               >
                 <Icon name="print" />
               </button>
+              <button
+                className="icon-btn"
+                aria-label="Reading settings"
+                title="Reading settings"
+                onClick={() => setModal("reading")}
+              >
+                <Icon name="settings" />
+              </button>
               <span className="tool-separator" />
               <button
                 className="icon-btn font-button"
@@ -1208,14 +1433,16 @@ export function App() {
               <button
                 className="icon-btn font-button"
                 aria-label="Increase font size"
-                onClick={() => setFont((v) => Math.min(30, v + 1))}
+                onClick={() => setFont((v) => Math.min(36, v + 1))}
               >
                 A+
               </button>
               <button
                 className="icon-btn"
                 aria-label={dark ? "Use light theme" : "Use dark theme"}
-                onClick={() => setDark((v) => !v)}
+                onClick={() =>
+                  setTheme((t) => (t === "night" ? "paper" : "night"))
+                }
               >
                 <Icon name={dark ? "sun" : "moon"} />
               </button>
@@ -1287,6 +1514,13 @@ export function App() {
                               {String(i + 1).padStart(2, "0")}
                             </span>
                             <span>{n.title}</span>
+                            <small className="toc-page-count">
+                              {chapterCounts[idx]
+                                ? `${chapterCounts[idx]} ${chapterCounts[idx] === 1 ? "page" : "pages"}`
+                                : counting
+                                  ? "…"
+                                  : "Open to count"}
+                            </small>
                             {idx === chapter && <i />}
                           </button>
                         );
@@ -1348,7 +1582,7 @@ export function App() {
                           />
                           <p>
                             {tab === "bookmarks"
-                              ? "Your saved chapters will appear here."
+                              ? "Your saved pages will appear here."
                               : "Select a passage, then choose Highlight."}
                           </p>
                         </div>
@@ -1374,7 +1608,27 @@ export function App() {
                       <Icon name="list" />
                     </button>
                   )}
+                  <button
+                    className="icon-btn chapter-skip"
+                    aria-label="Previous chapter"
+                    onClick={() => navigate(chapter - 1)}
+                    disabled={chapter === 0 || chapterLoading}
+                  >
+                    <Icon name="prev" size={15} />
+                  </button>
                   <span>CHAPTER {String(chapter + 1).padStart(2, "0")}</span>
+                  <button
+                    className="icon-btn chapter-skip"
+                    aria-label="Next chapter"
+                    onClick={() => navigate(chapter + 1)}
+                    disabled={
+                      !engine ||
+                      chapter === engine.chapters.length - 1 ||
+                      chapterLoading
+                    }
+                  >
+                    <Icon name="next" size={15} />
+                  </button>
                   {engine?.fixedLayout && (
                     <span className="tag">Fixed layout</span>
                   )}
@@ -1398,16 +1652,12 @@ export function App() {
                   </button>
                 </form>
                 <button
-                  className={`bookmark-action ${currentMarks.some((m) => m.kind === "bookmark") ? "saved" : ""}`}
+                  className={`bookmark-action ${!!currentBookmark ? "saved" : ""}`}
                   onClick={safe(addBookmark)}
-                  disabled={!engine}
+                  disabled={!engine || !pageInfo || chapterLoading}
                 >
                   <Icon name="bookmark" size={16} />
-                  <span>
-                    {currentMarks.some((m) => m.kind === "bookmark")
-                      ? "Bookmarked"
-                      : "Bookmark"}
-                  </span>
+                  <span>{!!currentBookmark ? "Bookmarked" : "Bookmark"}</span>
                 </button>
               </div>
               <div className="paper-wrap">
@@ -1421,7 +1671,7 @@ export function App() {
                     ref={frame}
                     title="Book chapter"
                     sandbox="allow-same-origin"
-                    srcDoc={readerDocument(rendered.html, font, dark)}
+                    srcDoc={createReadingDocument(rendered.html)}
                     onLoad={loaded}
                   />
                 ) : (
@@ -1455,38 +1705,57 @@ export function App() {
                   </div>
                 )}
               </div>
-              <footer className="reader-footer">
+              <footer className="reader-footer paginated-footer">
                 <button
                   className="page-button"
-                  onClick={() => navigate(chapter - 1)}
-                  disabled={chapter === 0 || chapterLoading}
+                  onClick={() => turnPage(-1)}
+                  disabled={
+                    !pageInfo ||
+                    chapterLoading ||
+                    (chapter === 0 && pageInfo.page === 1)
+                  }
                 >
                   <Icon name="prev" size={16} />
-                  Previous chapter
+                  Previous page
                 </button>
-                <div>
-                  <span>
-                    {chapter + 1} <i>/</i> {engine?.chapters.length || "—"}{" "}
-                    chapters
+                <div className="page-location">
+                  <span className="page-count" aria-live="polite">
+                    {pageInfo
+                      ? `Page ${pageInfo.page} of ${pageInfo.pages}`
+                      : "Counting pages…"}
                   </span>
-                  <div className="reading-progress">
-                    <i
-                      style={{
-                        width: `${engine ? ((chapter + 1) / engine.chapters.length) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
+                  <span className="chapter-location">
+                    Chapter {chapter + 1} of {engine?.chapters.length || "—"}
+                    {chapterCounts.length > 0 &&
+                    chapterCounts.every((n) => n > 0) &&
+                    pageInfo
+                      ? ` · Book page ${chapterCounts.slice(0, chapter).reduce((a, b) => a + b, 0) + pageInfo.page} of ${chapterCounts.reduce((a, b) => a + b, 0)}`
+                      : ""}
+                  </span>
+                  <input
+                    type="range"
+                    aria-label="Page in chapter"
+                    min="1"
+                    max={pageInfo?.pages || 1}
+                    value={pageInfo?.page || 1}
+                    disabled={!pageInfo || pageInfo.pages < 2}
+                    onChange={(e) =>
+                      paginator.current?.goToPage(Number(e.target.value))
+                    }
+                  />
                 </div>
                 <button
                   className="page-button"
-                  onClick={() => navigate(chapter + 1)}
+                  onClick={() => turnPage(1)}
                   disabled={
                     !engine ||
-                    chapter === engine.chapters.length - 1 ||
-                    chapterLoading
+                    !pageInfo ||
+                    chapterLoading ||
+                    (chapter === engine.chapters.length - 1 &&
+                      pageInfo.page === pageInfo.pages)
                   }
                 >
-                  Next chapter
+                  Next page
                   <Icon name="next" size={16} />
                 </button>
               </footer>
@@ -1520,6 +1789,151 @@ export function App() {
             <Icon name="close" size={17} />
           </button>
         </div>
+      )}
+      {modal === "reading" && (
+        <Modal title="Make yourself comfortable" onClose={closeModal}>
+          <p className="reading-settings-intro">
+            A reading experience that feels like yours.
+          </p>
+          <fieldset className="reading-field">
+            <legend>READING DIRECTION</legend>
+            <div className="segmented">
+              <button
+                aria-pressed={mode === "horizontal"}
+                onClick={() => setMode("horizontal")}
+              >
+                <Icon name="next" size={17} />
+                Horizontal pages
+              </button>
+              <button
+                aria-pressed={mode === "vertical"}
+                onClick={() => setMode("vertical")}
+              >
+                <Icon name="list" size={17} />
+                Vertical reading
+              </button>
+            </div>
+          </fieldset>
+          <fieldset className="reading-field">
+            <legend>
+              TEXT SIZE <span>{font}px</span>
+            </legend>
+            <div className="font-slider">
+              <button
+                className="icon-btn"
+                aria-label="Smaller text"
+                onClick={() => setFont((v) => Math.max(14, v - 1))}
+              >
+                A−
+              </button>
+              <input
+                type="range"
+                aria-label="Text size"
+                min="14"
+                max="36"
+                value={font}
+                onChange={(e) => setFont(Number(e.target.value))}
+              />
+              <button
+                className="icon-btn"
+                aria-label="Larger text"
+                onClick={() => setFont((v) => Math.min(36, v + 1))}
+              >
+                A+
+              </button>
+            </div>
+          </fieldset>
+          <fieldset className="reading-field">
+            <legend>TYPEFACE</legend>
+            <div className="font-options">
+              {(
+                [
+                  ["literary", "Literary", "Georgia,serif"],
+                  ["classic", "Classic", "Palatino,serif"],
+                  ["modern", "Clean", "Arial,sans-serif"],
+                ] as const
+              ).map(([id, label, family]) => (
+                <button
+                  key={id}
+                  style={{ fontFamily: family }}
+                  aria-label={label}
+                  aria-pressed={fontChoice === id}
+                  onClick={() => setFontChoice(id)}
+                >
+                  <span>Aa</span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="reading-field">
+            <legend>APPEARANCE</legend>
+            <div className="theme-options">
+              {(["paper", "sepia", "night"] as const).map((t) => (
+                <button
+                  className={`theme-${t}`}
+                  key={t}
+                  aria-label={
+                    t === "paper" ? "Paper" : t === "sepia" ? "Sepia" : "Night"
+                  }
+                  aria-pressed={theme === t}
+                  onClick={() => setTheme(t)}
+                >
+                  <span>Aa</span>
+                  {t === "paper" ? "Paper" : t === "sepia" ? "Sepia" : "Night"}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <div className="reading-detail-controls">
+            <label>
+              Line spacing
+              <select
+                aria-label="Line spacing"
+                value={spacing}
+                onChange={(e) => setSpacing(Number(e.target.value))}
+              >
+                <option value="1.4">Compact</option>
+                <option value="1.7">Relaxed</option>
+                <option value="2">Spacious</option>
+              </select>
+            </label>
+            <label>
+              Margins
+              <select
+                aria-label="Reading margins"
+                value={margin}
+                onChange={(e) =>
+                  setMargin(e.target.value as ReadingSettings["margin"])
+                }
+              >
+                <option value="narrow">Narrow</option>
+                <option value="comfortable">Comfortable</option>
+                <option value="wide">Wide</option>
+              </select>
+            </label>
+          </div>
+          <p className="fine-print">
+            Page counts adapt to your text settings and window size. Your place
+            follows the text when the layout changes.
+          </p>
+          <div className="modal-actions">
+            <Button
+              kind="secondary"
+              onClick={() => {
+                setFont(22);
+                setMode("horizontal");
+                setFontChoice("literary");
+                setSpacing(1.7);
+                setMargin("comfortable");
+                setTheme("paper");
+              }}
+            >
+              Reset reading settings
+            </Button>
+            <Button onClick={closeModal}>Done</Button>
+          </div>
+        </Modal>
       )}
       {modal === "drive" && (
         <Modal title="Your books, from Drive" onClose={closeModal}>

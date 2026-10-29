@@ -390,6 +390,10 @@ export class Epub {
     signal?.throwIfAborted();
     return { html: content, images, warnings };
   }
+  chapterSize(index: number) {
+    const chapter = this.chapters[index];
+    return chapter ? this.entries.get(chapter.href)?.uncompressedSize || 0 : 0;
+  }
   releaseResources() {
     for (const u of this.urls.values()) URL.revokeObjectURL(u);
     this.urls.clear();

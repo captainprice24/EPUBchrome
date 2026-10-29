@@ -18,9 +18,15 @@ In Chrome, open `chrome://extensions`, enable **Developer mode**, choose **Load 
 
 ## Read a book
 
-Choose **Import a book** or drag an EPUB into the window. The original file remains untouched. Select a chapter from **Contents**, use the previous/next controls, or press the left/right arrow keys while focused inside a chapter. Reading is scrollable and chapter-based.
+Choose **Import a book** or drag an EPUB into the window. The original file remains untouched. Select a chapter from **Contents**. Reading opens in horizontal pages by default, with **Page X of Y** for the current chapter and a page-position slider. Previous/next page buttons turn within a chapter and cross to the adjacent chapter only at its ends. The small chapter arrows above the book skip directly between chapters.
 
-Use **Bookmark** to save a chapter position. Select book text and choose **Highlight** to store a passage. The navigation tabs and library sidebar let you revisit saved annotations. Font size and light/dark appearance are adjustable from the toolbar. **Find in chapter** finds the first matching text node in the current chapter; it is not a whole-book search.
+Open **Reading settings** in the toolbar to choose **Horizontal pages** or **Vertical reading**. Horizontal mode supports left/right keys, Page Up/Down, mouse-wheel page turns and horizontal swipes. Vertical mode supports natural scrolling and viewport-sized page steps; left/right and Page Up/Down turn pages, and up/down keys also advance a page while focused in the chapter. Home/End go to the first/last page of the chapter.
+
+The same panel adjusts text size (14–36 px), Literary/Classic/Clean typefaces, paper/sepia/night appearance, line spacing and margins. These settings are remembered locally. Font and viewport changes recalculate pagination and return to the page containing the saved text anchor. A page number is a **layout page**, not necessarily the publisher's printed page. Publisher-supplied page lists remain available separately in Contents.
+
+Contents shows page counts for the current layout. Other chapters are counted sequentially in the background and cached. Chapters larger than 2 MB of markup are counted when opened to avoid expensive background parsing. A whole-book page count appears once all chapter counts are known; it changes with the reading layout.
+
+Use **Bookmark** to save the current page; clicking **Bookmarked** removes that page's bookmark. Several pages in the same chapter can be bookmarked. Select book text and choose **Highlight** to store a passage. The navigation tabs and library sidebar revisit saved annotations. New bookmarks follow text offsets across reflow; their saved page labels describe the layout at creation. Older chapter/scroll bookmarks remain accessible. **Find in chapter** finds the first matching text node in the current chapter and brings its page into view; it is not a whole-book search.
 
 The library stores separate copies of each imported book. Importing the same file again creates another library entry.
 
@@ -40,7 +46,7 @@ This is browser printing, not an automated EPUB-to-PDF conversion engine. Highli
 
 Open a chapter that contains an image, select the scan icon, choose the image, and click **Recognize text**. Recognition uses the packaged English model on your device. You can cancel recognition and download the result as a text file. The latest result for the chapter can be reopened in the OCR dialog; records are stored separately from the EPUB.
 
-Review every result for errors. Model confidence is an engine estimate, not a calibrated accuracy guarantee. Handwriting, other languages, batch recognition and automatic searchable-PDF text layers are not supported in v0.1. OCR edits made in the text box are included in a downloaded text file but do not update the original saved OCR record.
+Review every result for errors. Model confidence is an engine estimate, not a calibrated accuracy guarantee. Handwriting, other languages, batch recognition and automatic searchable-PDF text layers are not supported in v0.2. OCR edits made in the text box are included in a downloaded text file but do not update the original saved OCR record.
 
 ## Package or update
 
@@ -48,7 +54,7 @@ Review every result for errors. Model confidence is an engine estimate, not a ca
 npm run package
 ```
 
-The generated `.output/folio-0.1.0-chrome.zip` contains the production extension and local OCR assets. Extract it before using **Load unpacked**. The source ZIP from GitHub must be built first.
+The generated `.output/folio-0.2.0-chrome.zip` contains the production extension and local OCR assets. Extract it before using **Load unpacked**. The source ZIP from GitHub must be built first.
 
 After updating source, run `npm ci` and `npm run build`, then click **Reload** for Folio in `chrome://extensions`. Keep the extension ID and Chrome profile stable to preserve the same local storage and OAuth configuration.
 
@@ -68,12 +74,12 @@ After updating source, run `npm ci` and `npm run build`, then click **Reload** f
 
 ## Current limits
 
-| Area | v0.1 behavior |
+| Area | v0.2 behavior |
 | --- | --- |
 | Input | DRM-free `.epub` files; 1 GB compressed safety ceiling, not benchmarked supported capacity |
 | ZIP | At most 30,000 entries, 2 GB declared expanded size, 64 MB per extracted entry; suspicious compression and unsafe paths rejected |
 | Resources | 128 MB loaded-resource budget; very large individual chapters or image sets may fail |
-| Rendering | Chapter scrolling; native fixed-layout viewport fidelity, advanced SVG/media, scripted content and nested CSS imports are incomplete or unsupported |
+| Rendering | Horizontal pages or vertical reading; native fixed-layout viewport fidelity, advanced SVG/media, scripted content and nested CSS imports are incomplete or unsupported |
 | Page numbers | Publisher page lists when supplied; no invented universal page count for reflowable books |
 | Print | At most 300 chapters and 16 MB assembled markup; actual decoded image memory may be much larger |
 | OCR | Printed English, under 40 megapixels per image; review results manually |

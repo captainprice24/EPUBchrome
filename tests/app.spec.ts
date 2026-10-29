@@ -41,7 +41,7 @@ test("sample reading, chapters, bookmarks, highlights, font and persistence", as
     "true",
   );
   await page.getByRole("button", { name: "Increase font size" }).click();
-  await expect(book.locator("body")).toHaveCSS("font-size", "20px");
+  await expect(book.locator("#folio-content")).toHaveCSS("font-size", "23px");
   await page.getByRole("button", { name: "Next chapter" }).click();
   await expect(
     book.getByRole("heading", { name: "The shape of a place" }),
@@ -200,9 +200,14 @@ test("reading position and exported notes survive reopening a book", async ({
   await expect(
     book.getByRole("heading", { name: "A slower beginning" }),
   ).toBeVisible();
-  await book.locator("body").evaluate(() => window.scrollTo(0, 300));
+  await page.getByRole("button", { name: "Reading settings" }).click();
+  await page
+    .getByRole("button", { name: "Vertical reading", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page.getByRole("button", { name: "Next page", exact: true }).click();
   await expect
-    .poll(() => book.locator("body").evaluate(() => window.scrollY))
+    .poll(() => book.locator("#folio-viewport").evaluate((el) => el.scrollTop))
     .toBeGreaterThan(200);
   await page.getByRole("button", { name: "Bookmark", exact: true }).click();
   // The persistence debounce is awaited through an observable DB-backed round trip.
@@ -232,7 +237,7 @@ test("reading position and exported notes survive reopening a book", async ({
     book.getByRole("heading", { name: "A slower beginning" }),
   ).toBeVisible();
   await expect
-    .poll(() => book.locator("body").evaluate(() => window.scrollY))
+    .poll(() => book.locator("#folio-viewport").evaluate((el) => el.scrollTop))
     .toBeGreaterThan(200);
   await page.getByRole("button", { name: "Back to library" }).click();
   const event = page.waitForEvent("download");

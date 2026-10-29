@@ -7,7 +7,7 @@ export default defineConfig({
       name: "Folio — EPUB reading room",
       description:
         "A private reading room for EPUBs. Chapters, bookmarks, highlights, local OCR and PDF printing.",
-      version: "0.1.0",
+      version: "0.2.0",
       action: { default_title: "Open Folio" },
       permissions: ["storage", "identity"],
       host_permissions: ["https://www.googleapis.com/*"],

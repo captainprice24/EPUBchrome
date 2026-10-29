@@ -24,7 +24,7 @@ GitHub Pages availability depends on repository visibility and the account's pla
 - Google Drive uses Chrome extension identity APIs and is unavailable in the web preview. The preview explains this rather than attempting a non-working sign-in.
 - PDF output uses the browser's print dialog. Browser support and formatting can vary; Chrome is the primary test target.
 - No service worker is installed for offline website caching. After initial load, local recognition uses bundled assets, but a first visit or reload still needs the site resources to be available.
-- Language, file-size, rendering and export limitations are the same as those documented for v0.1 in [Installation](INSTALLATION.md).
+- Language, file-size, rendering and export limitations are the same as those documented for v0.2 in [Installation](INSTALLATION.md).
 
 ## Build and test locally
 

@@ -6,7 +6,7 @@
 
 A local-first Chrome extension for reading EPUBs, saving the passages that matter, and taking your reading to paper.
 
-![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-385546)
+![Version 0.2.0](https://img.shields.io/badge/version-0.2.0-385546)
 ![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest_V3-70865b)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 [![Build and test](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml)
@@ -19,17 +19,31 @@ A local-first Chrome extension for reading EPUBs, saving the passages that matte
 
 ## Read at your own pace
 
-Bring in a DRM-free EPUB from your computer, follow its chapters, and save bookmarks and highlights. Your library and notes live in your browser. The included **The Quiet Atlas** sample is an original short read, so you can try Folio immediately.
+Bring in a DRM-free EPUB from your computer, read page by page in either direction, and save bookmarks and highlights. Your library and notes live in your browser. The included **The Quiet Atlas** sample is an original short read, so you can try Folio immediately.
 
 ![Folio reader showing a saved text highlight and chapter navigation](docs/images/reader.png)
 
+### Pages that follow your reading
+
+Turn pages horizontally or read vertically, see the page count in each chapter, and return to your saved passage. Text size, typeface, spacing, margins and window size recalculate the layout without discarding your place.
+
+![Page navigation with chapter page counts and a saved reading position](docs/images/pagination.png)
+
+<details>
+<summary>Reading preferences: direction, text, spacing and themes</summary>
+
+![Folio reading preferences](docs/images/reading-settings.png)
+
+</details>
+
 ## Features
 
-| Feature | Available in v0.1 |
+| Feature | Available in v0.2 |
 | --- | --- |
 | Local EPUB library | File picker, drag and drop, title/author search, sorting and removal |
 | Chapter navigation | EPUB 3 contents, EPUB 2 NCX, spine order and publisher page lists when supplied |
-| Reading tools | Font sizing, dark mode, chapter search and reading-position restoration |
+| Pages and reading tools | Per-chapter page counts, horizontal or vertical reading, a page slider, text-based resume and chapter search |
+| Reading preferences | Text size, three typefaces, paper/sepia/night themes, line spacing and margins |
 | Bookmarks and highlights | Persistent annotations, navigation and JSON note export |
 | On-device OCR | Printed English in chapter images; bundled worker, WASM and model; text download |
 | PDF printing | Current chapter or whole book through Chrome’s **Save as PDF** dialog |
@@ -70,7 +84,7 @@ The app itself does not require a server, a Google account or an OCR subscriptio
 npm run package
 ```
 
-This creates `.output/folio-0.1.0-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
+This creates `.output/folio-0.2.0-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
 
 ### Develop and test
 
@@ -78,7 +92,7 @@ This creates `.output/folio-0.1.0-chrome.zip`. Unzip it and load the extracted f
 npm run dev          # WXT development browser
 npm run typecheck    # Strict TypeScript checks
 npm run build        # Production Chrome MV3 build
-npm test             # Seven browser integration tests
+npm test             # Reader, OCR and pagination integration tests
 ```
 
 Browser tests require Chromium. Set `CHROMIUM_PATH` to its executable, or follow the [test setup instructions](CONTRIBUTING.md#browser-tests). GitHub Actions builds and tests the app and is configured to upload an extension ZIP after successful checks; workflow results appear in the **Actions** tab.

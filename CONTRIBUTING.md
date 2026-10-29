@@ -53,6 +53,7 @@ The cloud machine blocks unpacked extensions by administrator policy. HTTP-based
 | `entrypoints/reader` | React application entrypoint |
 | `src/App.tsx`, `src/style.css` | Library, reader and interaction UI |
 | `src/epub.ts` | Bounded ZIP access, EPUB parsing and sandboxed resource preparation |
+| `src/reader.ts` | Pagination, text anchors, reading layout and bounded background chapter counting |
 | `src/annotations.ts` | Text-offset selection and highlight restoration |
 | `src/store.ts` | IndexedDB models, file download helpers and local library operations |
 | `src/drive.ts` | Google identity and streamed Drive import |

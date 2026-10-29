@@ -10,7 +10,12 @@ export interface Book {
   blob: Blob;
   cover?: Blob;
   chapterCount: number;
+  pagination?: { key: string; counts: number[] };
   position?: number;
+  textOffset?: number;
+  page?: number;
+  pageCount?: number;
+  readingMode?: "horizontal" | "vertical";
 }
 export interface Mark {
   id: string;
@@ -23,6 +28,10 @@ export interface Mark {
   end?: number;
   created: number;
   position?: number;
+  textOffset?: number;
+  page?: number;
+  pageCount?: number;
+  readingMode?: "horizontal" | "vertical";
 }
 export interface OCRNote {
   id: string;
