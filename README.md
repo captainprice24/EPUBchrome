@@ -11,7 +11,7 @@ A local-first Chrome extension for reading EPUBs, saving the passages that matte
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 [![Build and test](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml)
 
-[Get started](#get-started) · [Features](#features) · [Google Drive](docs/GOOGLE_DRIVE.md) · [Contribute](CONTRIBUTING.md) · [Research](docs/RESEARCH.md)
+[Web preview](https://captainprice24.github.io/EPUBchrome/) · [Get started](#get-started) · [Features](#features) · [Google Drive](docs/GOOGLE_DRIVE.md) · [Contribute](CONTRIBUTING.md) · [Research](docs/RESEARCH.md)
 
 </div>
 
@@ -36,6 +36,12 @@ Bring in a DRM-free EPUB from your computer, follow its chapters, and save bookm
 | Google Drive | File-link import after configuring a Google OAuth client; live-account validation pending |
 
 **This is an early development build.** Handwriting recognition, accurate native fixed-layout rendering, automated PDF conversion and verified very-large-book performance are still future work. The 1 GB input ceiling is a safety limit, not a performance guarantee. See [current limits](docs/INSTALLATION.md#current-limits) and [validation coverage](docs/VALIDATION.md).
+
+## Try the web preview
+
+The GitHub Pages test site is configured for **https://captainprice24.github.io/EPUBchrome/**. Deployment runs after successful checks on `main`; check the [Actions tab](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml) for its status.
+
+Try the sample or import a local EPUB to test reading, bookmarks, highlights, local printed-English OCR and PDF printing without installing the extension. The preview also provides a Chrome extension ZIP. Google Drive sign-in requires the configured extension, and the web preview has separate local storage. See [Pages deployment and testing](docs/GITHUB_PAGES.md).
 
 ## Get started
 

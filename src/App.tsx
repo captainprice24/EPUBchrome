@@ -143,6 +143,7 @@ function Button({
   );
 }
 export function App() {
+  const webPreview = import.meta.env.MODE === "pages";
   const [books, setBooks] = useState<Book[]>([]),
     [marks, setMarks] = useState<Mark[]>([]),
     [selectedId, setSelectedId] = useState<string | null>(null),
@@ -759,6 +760,19 @@ export function App() {
         if (file && !busy) void importFile(file);
       }}
     >
+      {webPreview && (
+        <div className="web-preview-banner">
+          <span>
+            <strong>Folio web preview</strong> · Try local books, highlights,
+            OCR and PDF printing. Books stay in this browser; the extension has
+            a separate library.
+          </span>
+          <a href={asset("folio-chrome.zip")} download>
+            <Icon name="download" size={15} />
+            Get Chrome extension
+          </a>
+        </div>
+      )}
       <input
         ref={input}
         type="file"
@@ -1512,38 +1526,80 @@ export function App() {
           <div className="modal-illustration">
             <Icon name="drive" size={36} />
           </div>
-          <p>
-            Bring an EPUB from Google Drive into your private library. Your
-            original file stays unchanged.
-          </p>
-          <label className="field-label" htmlFor="drive-link">
-            GOOGLE DRIVE FILE LINK
-          </label>
-          <input
-            className="text-input"
-            id="drive-link"
-            placeholder="https://drive.google.com/file/d/…"
-            value={driveLink}
-            onChange={(e) => setDriveLink(e.target.value)}
-          />
-          <p className="fine-print">
-            Google sign-in is required. This version requests read-only Drive
-            access to download the file you choose. Your library stays in this
-            browser.
-          </p>
-          {driveBusy && <p role="status">{driveBusy}</p>}
-          <div className="modal-actions">
-            <Button kind="secondary" onClick={closeModal}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void runDrive()}
-              disabled={!driveLink.trim() || !!driveBusy}
-            >
-              <Icon name="drive" size={17} />
-              {driveBusy ? "Connecting…" : "Connect & open"}
-            </Button>
-          </div>
+          {webPreview ? (
+            <>
+              <p>
+                This web preview opens EPUBs from your computer. Google Drive
+                sign-in uses the Chrome extension and needs its OAuth setup.
+              </p>
+              <a
+                className="button secondary"
+                href={asset("folio-chrome.zip")}
+                download
+              >
+                Download Chrome extension
+              </a>
+              <p className="fine-print">
+                Unzip the download, open chrome://extensions, enable Developer
+                mode and choose Load unpacked.{" "}
+                <a
+                  href="https://github.com/captainprice24/EPUBchrome/blob/main/docs/GOOGLE_DRIVE.md"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Google Drive setup guide
+                </a>
+              </p>
+              <div className="modal-actions">
+                <Button kind="secondary" onClick={closeModal}>
+                  Close
+                </Button>
+                <Button
+                  onClick={() => {
+                    closeModal();
+                    input.current?.click();
+                  }}
+                >
+                  Import local EPUB
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p>
+                Bring an EPUB from Google Drive into your private library. Your
+                original file stays unchanged.
+              </p>
+              <label className="field-label" htmlFor="drive-link">
+                GOOGLE DRIVE FILE LINK
+              </label>
+              <input
+                className="text-input"
+                id="drive-link"
+                placeholder="https://drive.google.com/file/d/…"
+                value={driveLink}
+                onChange={(e) => setDriveLink(e.target.value)}
+              />
+              <p className="fine-print">
+                Google sign-in is required. This version requests read-only
+                Drive access to download the file you choose. Your library stays
+                in this browser.
+              </p>
+              {driveBusy && <p role="status">{driveBusy}</p>}
+              <div className="modal-actions">
+                <Button kind="secondary" onClick={closeModal}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => void runDrive()}
+                  disabled={!driveLink.trim() || !!driveBusy}
+                >
+                  <Icon name="drive" size={17} />
+                  {driveBusy ? "Connecting…" : "Connect & open"}
+                </Button>
+              </div>
+            </>
+          )}
         </Modal>
       )}
       {modal === "delete" && (

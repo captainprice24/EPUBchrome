@@ -22,6 +22,9 @@ Installation checks the English model against a pinned digest; the worker and WA
 | `npm run typecheck` | Generate WXT types and run strict TypeScript checks |
 | `npm run build` | Build `.output/chrome-mv3` |
 | `npm test` | Run the browser integration suite against the production build |
+| `npm run build:pages` | Build the `/EPUBchrome/` web preview and its extension download |
+| `npm run test:pages` | Test the preview, sample and OCR under the GitHub Pages path |
+| `npm run preview:pages` | Serve the built preview locally on port 4174 |
 | `npm run package` | Build and create the portable extension ZIP |
 | `npm run format` | Format TypeScript, React, styles and JavaScript helpers |
 

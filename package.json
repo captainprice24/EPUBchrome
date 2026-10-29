@@ -11,7 +11,10 @@
     "prepare:assets": "node scripts/assets.mjs",
     "postinstall": "node scripts/assets.mjs",
     "package": "npm run build && python3 scripts/package.py",
-    "format": "prettier --write src entrypoints tests scripts/*.mjs *.ts *.json"
+    "format": "prettier --write src entrypoints tests scripts/*.mjs *.ts *.json",
+    "build:pages": "npm run build && python3 scripts/package.py && vite build --config vite.web.config.ts --mode pages && node scripts/pages-assets.mjs",
+    "test:pages": "playwright test --config playwright.pages.config.ts",
+    "preview:pages": "node scripts/serve.mjs --pages"
   },
   "dependencies": {
     "@zip.js/zip.js": "2.24.0",

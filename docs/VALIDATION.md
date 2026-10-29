@@ -21,3 +21,7 @@ Not covered: a live Google account, extension-origin runtime, Windows/macOS Chro
 The repository audit also tested the proposed source tree in a fresh temporary directory, without dependencies or generated OCR files from the working checkout. `npm ci` downloaded and verified the English model from its documented upstream. TypeScript checks, the production build, all seven browser tests and ZIP packaging passed there. A dummy public OAuth client ID in `.env` was verified in the generated manifest; this checks configuration loading only, not live Google sign-in.
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` installs its own Chromium, builds the app, runs the suite and uploads the extension ZIP on success. Local validation does not establish that a remote Actions run has completed; consult the repository’s Actions tab for that status.
+
+## GitHub Pages preview
+
+A separate three-test browser suite exercises the production web build at `/EPUBchrome/`: sample import and navigation, note persistence and extension ZIP download; image EPUB import and local OCR using workers/model under the repository subpath; and narrow-screen layout plus the extension-only Drive explanation. Run `npm run build:pages` and `npm run test:pages`. These tests establish local preview behavior, not that the public GitHub Pages deployment is live. The workflow only deploys after the extension and Pages tests pass.

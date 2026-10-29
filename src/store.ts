@@ -50,9 +50,9 @@ export async function removeBook(id: string) {
   });
 }
 export const asset = (path: string) =>
-  typeof chrome !== "undefined" && chrome.runtime?.getURL
+  typeof chrome !== "undefined" && chrome.runtime?.id && chrome.runtime.getURL
     ? chrome.runtime.getURL("/" + path)
-    : "/" + path;
+    : import.meta.env.BASE_URL + path.replace(/^\/+/, "");
 export function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

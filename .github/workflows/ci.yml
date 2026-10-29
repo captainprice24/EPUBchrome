@@ -31,13 +31,21 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
+      - run: npm run build:pages
+      - run: npm run test:pages
       - run: python3 scripts/package.py
       - name: Upload extension ZIP
         uses: actions/upload-artifact@v4
         with:
           name: folio-chrome-extension
           path: .output/folio-*-chrome.zip
+          include-hidden-files: true
           if-no-files-found: error
+      - name: Upload Pages site
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .output/pages
       - name: Upload failed-test evidence
         if: failure()
         uses: actions/upload-artifact@v4
@@ -45,3 +53,27 @@ jobs:
           name: browser-test-results
           path: test-results/
           if-no-files-found: ignore
+
+  pages:
+    name: Deploy GitHub Pages preview
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: chrome
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Publish tested preview
+        id: deployment
+        uses: actions/deploy-pages@v4
