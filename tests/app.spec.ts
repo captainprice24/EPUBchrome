@@ -36,6 +36,8 @@ test("sample reading, chapters, bookmarks, highlights, font and persistence", as
     });
   await page.getByRole("button", { name: "Highlight", exact: true }).click();
   await expect(book.locator("mark[data-folio]").first()).toBeVisible();
+  const showNavigation = page.getByRole("button", { name: "Show navigation" });
+  if (await showNavigation.count()) await showNavigation.click();
   await expect(page.getByRole("tab", { name: "Highlights" })).toHaveAttribute(
     "aria-selected",
     "true",

@@ -12,6 +12,8 @@ def walk(suite):
     for error in errors:
      text=re.sub(r'\x1b\[[0-9;]*m','',error.get('message','No message recorded.'))
      lines.extend(['```text',text[:5000],'```'])
+     annotation=text[:4000].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+     print('::error title=Browser test failure::'+annotation)
  for child in suite.get('suites',[]):walk(child)
 for name in ['reader-results.json','pages-results.json']:
  p=Path('test-results')/name
