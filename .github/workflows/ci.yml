@@ -44,6 +44,8 @@ jobs:
               text=path.read_text()
               if '# Error details' in text:text=text.split('# Error details',1)[1].split('# Test source',1)[0]
               output.write('### '+path.parent.name+'\n\n'+text[:10000]+'\n\n')
+              notice=text[:4000].replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+              print('::notice title=Previous failed test '+path.parent.name+'::'+notice)
           PY_SUMMARY
       - run: npm ci
       - name: Install test browser
@@ -102,7 +104,17 @@ jobs:
       - name: Use the tested workflow as the Pages source
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api --method PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow --silent
+        run: |
+          if gh api --method PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow --silent 2>pages-source-error.txt; then
+            echo "Pages source is GitHub Actions."
+          else
+            python3 - <<'PY_WARNING'
+          from pathlib import Path
+          message=Path('pages-source-error.txt').read_text()[:1200]
+          message=message.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+          print('::warning title=Pages source needs a repository owner::Set Settings > Pages > Source to GitHub Actions. Deployment will continue. '+message)
+          PY_WARNING
+          fi
       - name: Publish tested preview
         id: deployment
         uses: actions/deploy-pages@v4
