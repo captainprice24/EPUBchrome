@@ -14,6 +14,9 @@ jobs:
     name: Chrome reader and package
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,6 +26,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Read the previous failed-test evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: browser-test-results
+          path: .output/prior-failure
+          run-id: 40892560089
+          github-token: ${{ github.token }}
+      - name: Summarize the previous failure
+        run: |
+          python3 - <<'PY_SUMMARY'
+          from pathlib import Path
+          import os
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output:
+            output.write('## Previous run failure evidence\n\n')
+            for path in Path('.output/prior-failure').rglob('error-context.md'):
+              text=path.read_text()
+              if '# Error details' in text:text=text.split('# Error details',1)[1].split('# Test source',1)[0]
+              output.write('### '+path.parent.name+'\n\n'+text[:10000]+'\n\n')
+          PY_SUMMARY
       - run: npm ci
       - name: Install test browser
         run: |
@@ -46,6 +68,9 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: .output/pages
+      - name: Summarize browser test failures
+        if: failure()
+        run: python3 scripts/ci-summary.py
       - name: Upload failed-test evidence
         if: failure()
         uses: actions/upload-artifact@v4

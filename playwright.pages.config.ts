@@ -18,5 +18,8 @@ export default defineConfig({
     url: "http://127.0.0.1:4174/EPUBchrome/",
     reuseExistingServer: !process.env.CI,
   },
-  reporter: "list",
+  reporter: [
+    ["list"],
+    ["json", { outputFile: "test-results/pages-results.json" }],
+  ],
 });

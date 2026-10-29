@@ -18,5 +18,8 @@ export default defineConfig({
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI,
   },
-  reporter: "list",
+  reporter: [
+    ["list"],
+    ["json", { outputFile: "test-results/reader-results.json" }],
+  ],
 });
