@@ -1,6 +1,7 @@
 import { db, type Book } from "./store";
 import { Epub, readerDocument } from "./epub";
 import { documentText, quoteLocator, RENDERER_VERSION } from "./locators";
+import { persistBookWrites } from "./binary-storage";
 
 // A DOM-dependent migration cannot run inside Dexie's schema upgrade transaction.
 // Capture v0.2 quotes lazily, atomically per book, before displaying v0.3 content.
@@ -78,9 +79,11 @@ export async function migrateLocators(book: Book, epub: Epub) {
     textOffset: locator ? book.textOffset : undefined,
     pagination: undefined,
   };
-  await db.transaction("rw", db.books, db.marks, async () => {
-    for (const [id, update] of updates) await db.marks.update(id, update);
-    await db.books.update(book.id, update);
-  });
+  await persistBookWrites(() =>
+    db.transaction("rw", db.books, db.marks, async () => {
+      for (const [id, update] of updates) await db.marks.update(id, update);
+      await db.books.update(book.id, update);
+    }),
+  );
   return { ...book, ...update };
 }

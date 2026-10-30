@@ -48,7 +48,7 @@ Images are bounded to **384 × 544** pixels and generation has a **10-second** b
 
 ## Browser storage compatibility
 
-If the browser rejects saving Blob/File objects, Folio retries with local typed byte chunks. Original bytes and MIME types are preserved, with the same reading, note and backup behavior. Existing native-Blob library records remain readable; no library reset or document conversion is needed. The compatibility representation requires Folio 0.4.2 or newer, so reload older open Folio tabs before using those items.
+If the browser rejects saving Blob/File objects, Folio retries with local typed byte chunks. Original bytes and MIME types are preserved, with the same reading, note and backup behavior. Existing native-Blob library records remain readable; no library reset or document conversion is needed. Recovery also covers failures that begin after import: reading-position saves, chapter changes and existing library records are retried without resetting the library. Version 0.4.5 extends this to metadata and annotation migrations, converting the latest record within its atomic write transaction. The compatibility representation requires Folio 0.4.2 or newer, so reload older open Folio tabs before using those items.
 
 This fallback has a **64 MB per-item budget**, including the original, cover and derived reading copy. It is an input/memory guard, not a performance guarantee. The normal Blob path retains the format limits above. For larger items rejected by compatibility storage, try a regular browsing tab or the Chrome extension. A private browsing library can disappear when the private session ends; use a regular tab and backups for durable storage. A failure to save does not upload or alter the original file.
 

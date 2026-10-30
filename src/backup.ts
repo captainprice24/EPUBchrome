@@ -9,6 +9,7 @@ import {
 } from "@zip.js/zip.js";
 import {
   db,
+  updateBook,
   type Book,
   type Mark,
   type OCRNote,
@@ -246,7 +247,7 @@ export async function restoreLibrary(file: File) {
     for (const book of existing) {
       if (!book.contentHash) {
         book.contentHash = await contentHash(book.blob);
-        await db.books.update(book.id, { contentHash: book.contentHash });
+        await updateBook(book.id, { contentHash: book.contentHash });
       }
     }
     await storageStatus(true);

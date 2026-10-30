@@ -1,4 +1,4 @@
-import type Dexie from "dexie";
+import Dexie from "dexie";
 import type { Book } from "./store";
 
 const fields = ["blob", "cover", "prepared"] as const;
@@ -11,8 +11,9 @@ interface StoredBinary {
   chunks: ArrayBuffer[];
 }
 // Retain the stored representation when a hydrated book is put/updated again.
-// The middleware stays synchronous: no file reads inside an IDB transaction.
+// Already byte-backed records serialize synchronously without reading files.
 const stored = new WeakMap<Blob, StoredBinary>();
+let compatibilityRequired = false;
 
 export function hydrateBook(book: Book): Book {
   const result = { ...book };
@@ -53,11 +54,30 @@ export function installBinaryStorage(db: Dexie) {
         return {
           ...table,
           mutate(request) {
-            return table.mutate(
-              request.type === "add" || request.type === "put"
-                ? { ...request, values: request.values.map(serializeBook) }
-                : request,
-            );
+            if (request.type !== "add" && request.type !== "put")
+              return table.mutate(request);
+            const write = () =>
+              table.mutate({
+                ...request,
+                values: request.values.map(serializeBook),
+              });
+            if (
+              compatibilityRequired &&
+              request.values.some((book) =>
+                fields.some(
+                  (field) =>
+                    book[field] instanceof Blob && !stored.has(book[field]),
+                ),
+              )
+            )
+              // A legacy record can still contain native Blobs. Convert the
+              // exact values being written, including Dexie's freshly read
+              // copies. waitFor keeps the transaction alive while reading bytes;
+              // concurrent saves cannot overwrite positions or notes meanwhile.
+              return Dexie.waitFor(
+                prepareCompatibilityStorage(request.values),
+              ).then(write);
+            return write();
           },
         };
       },
@@ -73,16 +93,17 @@ function blobStorageError(error: unknown): boolean {
   );
 }
 
-async function prepareCompatibilityStorage(books: Book[]) {
+async function prepareCompatibilityStorage(books: readonly Book[]) {
   // Some WebKit contexts cannot persist Blob/File objects at all. Copy bytes in
   // bounded slices, preserving MIME types and originals, rather than retrying
   // another Blob or expanding the file into base64 text.
   for (const book of books) {
-    const binaries = fields
-      .map((field) => book[field])
-      .filter((value): value is Blob => value instanceof Blob);
+    const values = fields.map((field) => book[field]);
+    const binaries = values.filter(
+      (value): value is Blob => value instanceof Blob,
+    );
     if (
-      binaries.reduce((sum, blob) => sum + blob.size, 0) >
+      values.reduce((sum, value) => sum + (value?.size || 0), 0) >
       MAX_COMPATIBILITY_BYTES
     )
       throw Error(
@@ -105,17 +126,18 @@ async function prepareCompatibilityStorage(books: Book[]) {
   }
 }
 
-/** The callback must be a fresh, atomic transaction with no external effects. */
-export async function persistBooks<T>(
-  books: Book[],
+/** Retry the entire atomic write, never an already-aborted transaction. */
+export async function persistBookWrites<T>(
   write: () => Promise<T>,
+  prepare?: () => Promise<void>,
 ): Promise<T> {
   try {
     return await write();
   } catch (error) {
     if (!blobStorageError(error)) throw error;
   }
-  await prepareCompatibilityStorage(books);
+  compatibilityRequired = true;
+  await prepare?.();
   try {
     return await write();
   } catch (error) {
@@ -124,4 +146,12 @@ export async function persistBooks<T>(
       "This browser could not save the file locally. Try a regular browsing tab or another browser. Keep your original file; existing library items have not been changed.",
     );
   }
+}
+
+/** The callback must be a fresh, atomic transaction with no external effects. */
+export function persistBooks<T>(
+  books: Book[],
+  write: () => Promise<T>,
+): Promise<T> {
+  return persistBookWrites(write, () => prepareCompatibilityStorage(books));
 }

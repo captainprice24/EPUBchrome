@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.5 — Recover file-storage failures while reading
+
+- Extended Blob/File storage recovery to reading positions, chapter changes, pagination counts, last-read dates, category moves and older-library fingerprints.
+- Retried legacy annotation migrations and restores as complete atomic transactions, including existing native-Blob records when a browser starts rejecting file writes after import.
+- Converted the latest record within its transaction using Dexie’s transaction keep-alive support, preserving concurrent metadata changes, annotations, original bytes and the existing 64 MB compatibility budget.
+- Added regressions for failures beginning during reading and while reopening older libraries; verified supplied EPUB chapters locally without publishing the supplied file.
+
 ## 0.4.4 — Real document previews and simpler library copy
 
 - Kept “Your reading room” on one line; moved the full browser-storage sentence to a single-line library footer and restored “Local first. Private by default.” in the sidebar.

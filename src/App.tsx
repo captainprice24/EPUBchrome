@@ -16,6 +16,7 @@ import {
   download,
   message,
   removeBook,
+  updateBook,
   bookCollection,
   type LibraryCollection,
   type Book,
@@ -520,7 +521,7 @@ export function App() {
           .filter((b) => !b.contentHash && b.size === file.size)
           .toArray()) {
           const candidateHash = await contentHash(candidate.blob);
-          await db.books.update(candidate.id, { contentHash: candidateHash });
+          await updateBook(candidate.id, { contentHash: candidateHash });
           if (candidateHash === hash) {
             existing = candidate;
             break;
@@ -657,7 +658,7 @@ export function App() {
       engineId.current = selectedId;
       setEngine(parser);
       setBusy("");
-      await db.books.update(book.id, { lastRead: Date.now() });
+      await updateBook(book.id, { lastRead: Date.now() });
     })().catch((e) => {
       if (!canceled) {
         setError(message(e));
@@ -716,9 +717,9 @@ export function App() {
         if (!cancel) setChapterLoading(false);
       });
     if (selectedId && engine.chapters[chapter]?.linear)
-      void db.books
-        .update(selectedId, { chapter })
-        .catch((e) => setError(message(e)));
+      void updateBook(selectedId, { chapter }).catch((e) =>
+        setError(message(e)),
+      );
     return () => {
       cancel = true;
       controller.abort();
@@ -840,22 +841,19 @@ export function App() {
           setChapterCounts(counts);
         }
         if (engine.chapters[chapterIndex]?.linear)
-          void db.books
-            .update(bookId, {
-              chapter: chapterIndex,
-              position: s.progress,
-              textOffset: s.offset,
-              locator: quoteLocator(
-                text,
-                engine.chapters[chapterIndex]!.href,
-                s.offset,
-              ),
-              page: engine.fixedPages ? chapterIndex + 1 : s.page,
-              pageCount: engine.fixedPages ? engine.linearCount : s.pages,
-              readingMode: doc.documentElement.dataset
-                .readingMode as ReadingMode,
-            })
-            .catch((e) => setError(message(e)));
+          void updateBook(bookId, {
+            chapter: chapterIndex,
+            position: s.progress,
+            textOffset: s.offset,
+            locator: quoteLocator(
+              text,
+              engine.chapters[chapterIndex]!.href,
+              s.offset,
+            ),
+            page: engine.fixedPages ? chapterIndex + 1 : s.page,
+            pageCount: engine.fixedPages ? engine.linearCount : s.pages,
+            readingMode: doc.documentElement.dataset.readingMode as ReadingMode,
+          }).catch((e) => setError(message(e)));
       },
       onDocumentPage: (index: number) => navigate(index),
       documentPages: engine.linearCount,
@@ -969,7 +967,7 @@ export function App() {
         }
       }
       if (!canceled && countsKey.current === key)
-        await db.books.update(selectedId, {
+        await updateBook(selectedId, {
           pagination: { key, counts: countsRef.current },
         });
     })()
@@ -1124,18 +1122,18 @@ export function App() {
     }
     if (mark.bookId !== selectedId) {
       jump.current = mark.kind === "highlight" ? mark.id : null;
-      void db.books
-        .update(mark.bookId, {
-          chapter: mark.chapter,
-          position: mark.position || 0,
-          textOffset: mark.textOffset,
-          locator: mark.locator,
-          page: mark.page,
-        })
+      void updateBook(mark.bookId, {
+        chapter: mark.chapter,
+        position: mark.position || 0,
+        textOffset: mark.textOffset,
+        locator: mark.locator,
+        page: mark.page,
+      })
         .then(() => {
           setChapter(mark.chapter);
           setSelectedId(mark.bookId);
-        });
+        })
+        .catch((e) => setError(message(e)));
     } else {
       navigate(mark.chapter, mark.kind === "highlight" ? mark.id : undefined);
       if (mark.kind === "bookmark") {
@@ -1772,7 +1770,7 @@ export function App() {
                               bookCollection(book) === "books"
                                 ? "documents"
                                 : "books";
-                            await db.books.update(book.id, { collection });
+                            await updateBook(book.id, { collection });
                             await refresh();
                             setNotice(
                               `Moved “${book.title}” to ${collection === "books" ? "Books" : "Documents"}.`,

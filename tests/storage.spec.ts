@@ -30,8 +30,9 @@ with ZipFile('public/demo.epub') as src, ZipFile('test-results/fixtures/covered.
   await page.close();
 });
 
-async function rejectBlobs(page: Page) {
-  await page.addInitScript(() => {
+async function rejectBlobs(page: Page, initially = true) {
+  await page.addInitScript((initially) => {
+    Reflect.set(window, "rejectBookBlobs", initially);
     // Reproduce WebKit's storage error at the IDB boundary. Typed byte data is
     // allowed, while every book Blob (including cover/cache) must be avoided.
     for (const method of ["add", "put"] as const) {
@@ -41,6 +42,7 @@ async function rejectBlobs(page: Page) {
         key?: IDBValidKey,
       ) {
         if (
+          Reflect.get(window, "rejectBookBlobs") &&
           this.name === "books" &&
           ["blob", "cover", "prepared"].some(
             (field) => value[field] instanceof Blob,
@@ -55,7 +57,7 @@ async function rejectBlobs(page: Page) {
           : original.call(this, value, key);
       };
     }
-  });
+  }, initially);
 }
 async function savedRecords(page: Page) {
   return page.evaluate(
@@ -245,3 +247,100 @@ with ZipFile('public/demo.epub') as src, ZipFile('test-results/fixtures/compatib
     page.getByRole("button", { name: "Bookmarked", exact: true }),
   ).toBeVisible();
 });
+
+for (const failurePoint of [
+  "during reading",
+  "during legacy migration",
+] as const) {
+  test(`native-Blob library recovers when storage starts rejecting files ${failurePoint}`, async ({
+    page,
+  }) => {
+    await rejectBlobs(page, false);
+    await page.goto("/reader.html");
+    await page
+      .getByLabel("Import document file")
+      .setInputFiles(fixture("covered.epub"));
+    await expect(
+      frame(page).getByRole("heading", { name: "A slower beginning" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Bookmark", exact: true }).click();
+    expect((await savedRecords(page))[0]!.blob.folioBinary).toBeUndefined();
+    if (failurePoint === "during legacy migration") {
+      await page.getByRole("button", { name: "Back to library" }).click();
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            const request = indexedDB.open("folio-library");
+            request.onsuccess = () => {
+              const db = request.result,
+                tx = db.transaction(["books", "marks"], "readwrite");
+              for (const name of ["books", "marks"]) {
+                const store = tx.objectStore(name),
+                  cursor = store.openCursor();
+                cursor.onsuccess = () => {
+                  const item = cursor.result;
+                  if (!item) return;
+                  const value = item.value;
+                  delete value.locator;
+                  if (name === "books") value.rendererVersion = 0;
+                  item.update(value);
+                  item.continue();
+                };
+              }
+              tx.oncomplete = () => {
+                db.close();
+                resolve();
+              };
+              tx.onerror = () => reject(tx.error);
+            };
+          }),
+      );
+      await page.reload();
+      await page.evaluate(() => Reflect.set(window, "rejectBookBlobs", true));
+      await page.getByRole("button", { name: "Read The Quiet Atlas" }).click();
+      await expect(
+        frame(page).getByRole("heading", { name: "A slower beginning" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Bookmarked", exact: true }),
+      ).toBeVisible();
+    } else {
+      await page.evaluate(() => Reflect.set(window, "rejectBookBlobs", true));
+    }
+    await page
+      .getByRole("button", { name: "Next chapter", exact: true })
+      .click();
+    await expect(
+      frame(page).getByRole("heading", { name: "The shape of a place" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Bookmark", exact: true }).click();
+    await expect
+      .poll(async () => (await savedRecords(page))[0]!.blob.folioBinary)
+      .toBe(1);
+    expect((await savedRecords(page))[0]!.cover!.folioBinary).toBe(1);
+    await page.getByRole("button", { name: "Back to library" }).click();
+    await page.reload();
+    await page.evaluate(() => Reflect.set(window, "rejectBookBlobs", true));
+    await page.getByRole("button", { name: "Read The Quiet Atlas" }).click();
+    await expect(
+      frame(page).getByRole("heading", { name: "The shape of a place" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Bookmarked", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Back to library" }).click();
+    await page.getByRole("button", { name: "Storage & backup" }).click();
+    const backupEvent = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Back up library", exact: true })
+      .click();
+    const backup = await backupEvent;
+    const bytes = execFileSync("python3", [
+      "-c",
+      'import zipfile,json,sys; z=zipfile.ZipFile(sys.argv[1]); m=json.loads(z.read("manifest.json")); assert len(m["annotations"]) == 2; sys.stdout.buffer.write(z.read(m["books"][0]["file"]))',
+      (await backup.path())!,
+    ]);
+    expect(bytes).toEqual(await readFile(fixture("covered.epub")));
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });
+}
