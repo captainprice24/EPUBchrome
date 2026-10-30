@@ -24,6 +24,12 @@ export async function openDocument(
   const engine = new Epub(content);
   try {
     await engine.open();
+    if (format === "epub" && engine.title === "Untitled book")
+      engine.title =
+        name
+          .replace(/\.epub$/i, "")
+          .trim()
+          .slice(0, 10000) || engine.title;
     engine.format = format;
     if (format !== "epub") engine.prepared = content;
     return engine;

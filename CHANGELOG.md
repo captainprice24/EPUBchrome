@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3 — Recoverable EPUB imports and independent page themes
+
+- Opened remaining declared EPUB content when a reading-order ID is absent from the manifest, with a persistent explanation of missing entries. Books with no usable reading order and unsafe external spine paths remain rejected.
+- Used the filename when EPUB title metadata is empty and started new books after an empty navigation document, preserving spine indices, saved places and original bytes.
+- Scoped Paper, Sepia and Night to the reading surface. Library, toolbars, navigation and settings follow system light/dark appearance independently.
+- Added recovery, original-byte backup and page-theme isolation coverage for both system appearances and the Pages build.
+
 ## 0.4.2 — Browser file-storage compatibility
 
 - Retried Blob/File-specific IndexedDB failures using typed byte chunks, preserving original file bytes, MIME types, covers and derived reading copies.

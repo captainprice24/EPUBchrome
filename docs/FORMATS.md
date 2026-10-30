@@ -18,7 +18,17 @@ All reading happens locally. Imported originals are stored unchanged, fingerprin
 - PDF/DjVu: at most **30,000 original pages**. The current page is rendered on demand, with an approximately **6-megapixel canvas budget** and bounded dimensions. Very high zoom on large pages can therefore reach a sharpness ceiling. DjVu work is canceled/restarted on navigation and its decoder is recycled periodically to limit retained caches.
 - Existing EPUB extraction/resource limits apply to prepared MOBI/Markdown reading copies. Actual file and markup complexity matters as much as compressed size.
 
-Fixed pages retain their original fonts and colours. Reading themes change the surrounding UI. Horizontal mode fits the page; vertical mode fits its width and allows scrolling within it. Page controls and boundary scrolling move between original pages; a continuous strip of all pages is not provided.
+Fixed pages retain their original fonts and colours. Reading themes change only the canvas around original PDF/DjVu pages; the library and controls follow system light/dark appearance. Horizontal mode fits the page; vertical mode fits its width and allows scrolling within it. Page controls and boundary scrolling move between original pages; a continuous strip of all pages is not provided.
+
+## EPUB recovery
+
+A reading-order entry can name an ID that is absent from the manifest, for example a leftover `cover` reference. Folio opens the remaining declared entries in their original order and shows a persistent structure warning naming missing IDs. It cannot reconstruct missing content or certify that such a book is complete. If there are no valid linear entries, import fails; archive/resource safety checks and external-path blocking remain in place.
+
+An empty navigation document remains addressable, with stable spine indices for notes and backups, but a newly imported book starts at the next linear content document. If title metadata is absent, the original filename supplies the library title. These accommodations do not rewrite the original EPUB, which remains unchanged in backups.
+
+## Page themes
+
+Paper, Sepia and Night apply to the reading surface. The library, toolbars, navigation and dialogs follow your device’s light/dark appearance, so selecting Sepia never recolours the whole app. Page preferences survive reopening; the sun/moon reading button switches page themes only. Original PDF/DjVu pixels keep their publisher colours.
 
 ## Books and Documents
 

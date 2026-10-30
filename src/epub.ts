@@ -70,6 +70,8 @@ export class Epub {
   language = "";
   progression: "ltr" | "rtl" = "ltr";
   linearCount = 0;
+  initialChapter = 0;
+  warnings: string[] = [];
   constructor(blob: Blob) {
     if (blob.size > 1024 ** 3)
       throw Error("This version supports EPUB files up to 1 GB.");
@@ -122,17 +124,36 @@ export class Epub {
         : "ltr";
     const items = elements(opf, "item");
     const manifest = new Map(items.map((e) => [e.getAttribute("id"), e]));
+    const missing: string[] = [];
     this.chapters = elements(opf, "itemref")
       .filter((e) => e.getAttribute("linear") !== "no")
-      .map((e, i) => {
-        const item = manifest.get(e.getAttribute("idref"));
-        if (!item) throw Error("A chapter is missing from the EPUB manifest.");
-        return {
-          href: resolvePath(opfPath, item.getAttribute("href") || ""),
-          title: `Chapter ${i + 1}`,
-          linear: true,
-        };
+      .flatMap((e) => {
+        const id = e.getAttribute("idref");
+        const item = manifest.get(id);
+        if (!item) {
+          missing.push(id || "(empty reference)");
+          return [];
+        }
+        return [
+          {
+            href: resolvePath(opfPath, item.getAttribute("href") || ""),
+            title: "",
+            linear: true,
+          },
+        ];
       });
+    this.chapters.forEach((chapter, i) => {
+      chapter.title = `Chapter ${i + 1}`;
+    });
+    if (missing.length) {
+      const names = missing
+        .slice(0, 5)
+        .map((id) => `“${id.slice(0, 100)}”`)
+        .join(", ");
+      this.warnings.push(
+        `${missing.length} reading-order ${missing.length === 1 ? "entry is" : "entries are"} missing from the EPUB manifest: ${names}${missing.length > 5 ? ", …" : ""}. The remaining declared content is available; missing content cannot be displayed. Your original file is unchanged.`,
+      );
+    }
     this.linearCount = this.chapters.length;
     // Keep legacy linear indices stable. Supplementary content is link-addressable,
     // but never inserted into sequential reading or whole-book page counts.
@@ -167,6 +188,20 @@ export class Epub {
     if (nav) {
       const p = resolvePath(opfPath, nav.getAttribute("href") || "");
       const doc = xml(await this.text(p));
+      const body = elements(doc, "body")[0];
+      if (
+        this.chapters[0]?.href === p &&
+        body &&
+        !body.textContent?.trim() &&
+        !body.querySelector("img,svg,math,video,audio,object")
+      ) {
+        // Preserve spine indices for notes/backups, but do not start a new book
+        // on a navigation document which has no visible content.
+        const next = this.chapters.findIndex(
+          (chapter) => chapter.linear && chapter.href !== p,
+        );
+        if (next >= 0) this.initialChapter = next;
+      }
       for (const section of elements(doc, "nav")) {
         const type =
           section.getAttribute("epub:type") ||

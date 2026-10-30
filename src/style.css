@@ -1189,7 +1189,7 @@ a {
   width: 100%;
   display: block;
   border: 0;
-  background: var(--surface);
+  background: inherit;
 }
 .reader-loading {
   display: flex;
@@ -1381,11 +1381,6 @@ a {
 }
 .night .reader-main {
   background: #1c241f;
-}
-.night .paper-wrap,
-.night .paper-wrap iframe {
-  background: #242923;
-  border-color: #344032;
 }
 .night .reader-book-title,
 .night .reader-brand {
@@ -1890,19 +1885,6 @@ a {
   width: 24px !important;
   height: 28px !important;
 }
-.app.sepia .reader-main {
-  background: var(--surface-raised);
-}
-.app.sepia .paper-wrap {
-  background: var(--surface-raised);
-  border-color: #ddd0b5;
-}
-.app.sepia .reader-top {
-  background: var(--surface-raised);
-}
-.app.sepia .reader-sidebar {
-  background: var(--surface-raised);
-}
 .night .reader-footer .page-count {
   color: var(--text-secondary);
 }
@@ -1997,7 +1979,7 @@ a {
   }
 }
 
-/* Semantic theme tokens for all working surfaces, including the library. */
+/* System appearance for the app interface; reading pages use their own theme. */
 .app {
   --surface: #fffdf8;
   --surface-raised: #edf0e5;
@@ -2016,13 +1998,6 @@ a {
   --border: #788a70;
   --focus: #98c5ff;
   color-scheme: dark;
-}
-.app.sepia {
-  --surface: #f3e7ce;
-  --surface-raised: #e6d8b9;
-  --text-primary: #423724;
-  --text-secondary: #594a31;
-  --border: #8d7852;
 }
 .app :is(button, a, input, select, textarea, [tabindex]):focus-visible {
   outline: 3px solid var(--focus);
@@ -2368,4 +2343,44 @@ a {
   .app.reading .toast {
     bottom: 110px;
   }
+}
+
+/* Page themes are independent of the system appearance used by the app UI. */
+.paper-wrap[data-page-theme="paper"] {
+  background: #fffdf8;
+  --page-text: #343c32;
+}
+.paper-wrap[data-page-theme="sepia"] {
+  background: #f3e7ce;
+  --page-text: #4d3d2b;
+}
+.paper-wrap[data-page-theme="night"] {
+  background: #242923;
+  --page-text: #edece3;
+}
+.paper-wrap .reader-loading,
+.paper-wrap .empty {
+  color: var(--page-text);
+}
+.document-warning {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.document-warning summary {
+  cursor: pointer;
+}
+.document-warning summary svg {
+  vertical-align: middle;
+  margin-inline: 4px;
+}
+.document-warning p {
+  margin: 8px 0 2px;
+  max-height: 100px;
+  overflow: auto;
+  overflow-wrap: anywhere;
 }

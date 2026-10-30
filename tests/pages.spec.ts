@@ -233,4 +233,35 @@ test("Pages library categories, banner contrast and long document titles work on
   await expect(page.locator(".book-card")).toHaveCount(1);
   await page.reload();
   await expect(page.locator(".book-card")).toHaveCount(1);
+  const colors = await page
+    .locator(".app")
+    .evaluate((el) => [
+      getComputedStyle(el).backgroundColor,
+      getComputedStyle(el).color,
+    ]);
+  await page.locator(".book-open").click();
+  await expect(page.locator(".page-count")).toContainText("Page 1 of");
+  await page.getByRole("button", { name: "Reading settings" }).click();
+  await page.getByRole("button", { name: "Sepia", exact: true }).click();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(
+    page.frameLocator('iframe[title="Book chapter"]').locator("body"),
+  ).toHaveCSS("background-color", "rgb(243, 231, 206)");
+  expect(
+    await page
+      .locator(".app")
+      .evaluate((el) => [
+        getComputedStyle(el).backgroundColor,
+        getComputedStyle(el).color,
+      ]),
+  ).toEqual(colors);
+  await page.getByRole("button", { name: "Back to library" }).click();
+  expect(
+    await page
+      .locator(".app")
+      .evaluate((el) => [
+        getComputedStyle(el).backgroundColor,
+        getComputedStyle(el).color,
+      ]),
+  ).toEqual(colors);
 });

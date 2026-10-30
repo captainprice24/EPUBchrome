@@ -16,6 +16,8 @@ export interface DocumentEngine {
   toc: Nav[];
   pages: Nav[];
   linearCount: number;
+  initialChapter?: number;
+  warnings?: string[];
   fixedLayout: boolean;
   prepared?: Blob;
   coverPath?: string;

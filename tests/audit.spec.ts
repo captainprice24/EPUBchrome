@@ -278,9 +278,13 @@ test("duplicate imports, theme memory, focus and reader tabs behave predictably"
   await page.getByRole("button", { name: "Reading settings" }).click();
   await page.getByRole("button", { name: "Sepia", exact: true }).click();
   await page.getByRole("button", { name: "Done", exact: true }).click();
-  await page.getByRole("button", { name: "Use dark theme" }).click();
-  await page.getByRole("button", { name: "Use light theme" }).click();
-  await expect(page.locator(".app")).toHaveClass(/sepia/);
+  await page.getByRole("button", { name: "Use dark pages" }).click();
+  await page.getByRole("button", { name: "Use light pages" }).click();
+  await expect(page.locator(".paper-wrap")).toHaveAttribute(
+    "data-page-theme",
+    "sepia",
+  );
+  await expect(page.locator(".app")).not.toHaveClass(/sepia/);
   await page.getByRole("tab", { name: "Contents" }).focus();
   await page.getByRole("tab", { name: "Contents" }).press("ArrowRight");
   await expect(page.getByRole("tab", { name: "Saved" })).toBeFocused();

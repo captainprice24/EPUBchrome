@@ -30,7 +30,7 @@ A separate three-test browser suite exercises the production web build at `/EPUB
 
 Four additional browser scenarios use an 80-paragraph EPUB chapter. They verify multi-page horizontal layout and counts, page turns without chapter jumps, exact page restoration after reopening, background chapter counts and book totals, reflow with a preserved passage, persistent font/theme/direction settings, multiple page bookmarks in one chapter, keyboard crossing of chapter boundaries, swipe turns, resize-driven repagination and narrow-screen layout. The original annotation/OCR/print tests remain in place and use the new page viewport where relevant.
 
-The full suite now contains 36 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
+The full suite now contains 40 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
 
 ## Audit regressions
 
@@ -55,3 +55,7 @@ Three additional reader scenarios verify fullscreen bookmark/highlight creation 
 ## Blob/File storage compatibility (v0.4.2)
 
 Three additional reader scenarios inject the reported “Error preparing Blob/File data to be stored in object store” at the IndexedDB boundary. They verify PDF original-byte downloads, physical pages, highlights/bookmarks, reloads and backup/restore; EPUB covers and Markdown derived copies through reading-position/category updates; and a clear oversized-compatibility error without deleting an existing book or bookmark. Synthetic fixtures are original project material. These injected failures are regression coverage, not a claim of reproducing a particular iPhone Safari build or private session.
+
+## EPUB recovery and independent page themes (v0.4.3)
+
+Four additional scenarios use original project fixtures to verify a missing cover ID with remaining readable chapters, filename title fallback, an empty initial navigation document, persisted bookmarks and unchanged originals in backups; rejection of an entirely unusable spine and external spine URLs; and page-theme isolation from reader/library colours under both light and dark system appearances. Pages category coverage also checks that selecting Sepia changes the document canvas without recolouring the library. This does not certify recovery of every malformed EPUB or invent content absent from its archive.

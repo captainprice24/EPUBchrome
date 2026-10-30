@@ -6,7 +6,7 @@
 
 A private, **EPUB-first book library** for Chrome. Read EPUB and MOBI books, keep **PDF, DjVu and Markdown** in a separate Documents collection, and use fullscreen reading, bookmarks, highlights and local OCR throughout.
 
-![Version 0.4.2](https://img.shields.io/badge/version-0.4.2-385546)
+![Version 0.4.3](https://img.shields.io/badge/version-0.4.3-385546)
 ![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest_V3-70865b)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 [![Build and test](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml)
@@ -25,14 +25,16 @@ Bring in a DRM-free EPUB, PDF, DjVu, MOBI or Markdown file from your computer, r
 
 ### Pages that follow your reading
 
-Turn pages horizontally or read vertically, see the page count in each chapter, and return to your saved passage. Text size, typeface, spacing, margins and window size recalculate the layout without discarding your place.
+Turn pages horizontally or read vertically, see the page count in each chapter, and return to your saved passage. Text size, typeface, spacing, margins and window size recalculate the layout without discarding your place. Paper, Sepia and Night change only the reading pages; the library and controls follow your device’s light or dark appearance.
 
 ![Page navigation with chapter page counts and a saved reading position](docs/images/pagination.png)
 
 <details>
 <summary>Reading preferences: direction, text, spacing and themes</summary>
 
-![Folio reading preferences](docs/images/reading-settings.png)
+![Folio reading preferences with independent page appearance](docs/images/reading-settings.png)
+
+![Sepia book pages with the app interface following the device appearance](docs/images/sepia-pages.png)
 
 </details>
 
@@ -91,7 +93,7 @@ The app itself does not require a server, a Google account or an OCR subscriptio
 npm run package
 ```
 
-This creates `.output/folio-0.4.2-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
+This creates `.output/folio-0.4.3-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
 
 ### Develop and test
 

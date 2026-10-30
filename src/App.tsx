@@ -290,6 +290,15 @@ export function App() {
           ? "night"
           : "paper";
   });
+  const [interfaceDark, setInterfaceDark] = useState(
+    () => window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const change = () => setInterfaceDark(media.matches);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
   const lastLightTheme = useRef<ReadingTheme>(
     localStorage.getItem("folio-light-theme") === "sepia" ? "sepia" : "paper",
   );
@@ -337,7 +346,7 @@ export function App() {
   }, [fullscreen.enabled, immersiveSidebar, tab]);
   const fixedPages = !!engine?.fixedPages;
   const paper = useRef<HTMLDivElement>(null);
-  const dark = theme === "night";
+  const darkPages = theme === "night";
   const settings = useMemo<ReadingSettings>(
     () => ({
       mode,
@@ -415,7 +424,7 @@ export function App() {
     localStorage.setItem("folio-spacing", String(spacing));
     localStorage.setItem("folio-margin", margin);
     localStorage.setItem("folio-theme", theme);
-  }, [font, dark, mode, fontChoice, spacing, margin, theme]);
+  }, [font, mode, fontChoice, spacing, margin, theme]);
   useEffect(() => {
     paginator.current?.configure(settings);
   }, [settings]);
@@ -504,7 +513,7 @@ export function App() {
         size: file.size,
         added: Date.now(),
         lastRead: Date.now(),
-        chapter: 0,
+        chapter: parser.initialChapter || 0,
         blob: file,
         cover,
         chapterCount: parser.linearCount,
@@ -1384,7 +1393,7 @@ export function App() {
   return (
     <div
       ref={fullscreen.ref}
-      className={`app ${fullscreen.enabled ? "immersive" : ""} ${fixedPages ? "native-reading" : ""} ${selectedId ? "reading" : ""} ${dark ? "night" : ""} ${theme === "sepia" ? "sepia" : ""}`}
+      className={`app ${fullscreen.enabled ? "immersive" : ""} ${fixedPages ? "native-reading" : ""} ${selectedId ? "reading" : ""} ${interfaceDark ? "night" : ""}`}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -1994,14 +2003,19 @@ export function App() {
               </button>
               <button
                 className="icon-btn"
-                aria-label={dark ? "Use light theme" : "Use dark theme"}
+                aria-label={darkPages ? "Use light pages" : "Use dark pages"}
+                title={
+                  darkPages
+                    ? "Return to the previous light page theme"
+                    : "Switch book pages to Night"
+                }
                 onClick={() =>
                   setTheme((t) =>
                     t === "night" ? lastLightTheme.current : "night",
                   )
                 }
               >
-                <Icon name={dark ? "sun" : "moon"} />
+                <Icon name={darkPages ? "sun" : "moon"} />
               </button>
             </div>
           </header>
@@ -2075,6 +2089,17 @@ export function App() {
                 <Icon name="contract" size={17} /> Exit fullscreen
               </button>
             </div>
+          )}
+          {!!engine?.warnings?.length && (
+            <details className="document-warning">
+              <summary>
+                <Icon name="info" size={16} /> This EPUB has missing
+                reading-order entries
+              </summary>
+              {engine.warnings.map((warning, i) => (
+                <p key={i}>{warning}</p>
+              ))}
+            </details>
           )}
           <div className="reader-layout">
             {navigationOpen && (
@@ -2371,7 +2396,7 @@ export function App() {
                   <span>{!!currentBookmark ? "Bookmarked" : "Bookmark"}</span>
                 </button>
               </div>
-              <div className="paper-wrap" ref={paper}>
+              <div className="paper-wrap" data-page-theme={theme} ref={paper}>
                 {chapterLoading ? (
                   <div className="reader-loading">
                     <span className="spinner" />
@@ -2612,7 +2637,7 @@ export function App() {
             </div>
           </fieldset>
           <fieldset className="reading-field">
-            <legend>APPEARANCE</legend>
+            <legend>BOOK PAGE APPEARANCE</legend>
             <div className="theme-options">
               {(["paper", "sepia", "night"] as const).map((t) => (
                 <button
@@ -2628,6 +2653,10 @@ export function App() {
                 </button>
               ))}
             </div>
+            <p className="fine-print">
+              Applies to the reading pages. The library and controls follow your
+              device’s light or dark appearance.
+            </p>
           </fieldset>
           {fixedPages && (
             <p className="fine-print">
