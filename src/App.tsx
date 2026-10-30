@@ -291,6 +291,7 @@ export function App() {
   } | null>(null);
   const resumeLocator = useRef<TextLocator | undefined>(undefined);
   const restoreInput = useRef<HTMLInputElement>(null);
+  const restoreQueue = useRef<Promise<void>>(Promise.resolve());
   const [ocrNoteId, setOcrNoteId] = useState<string | null>(null);
   const [pageZoom, setPageZoom] = useState(1);
   const fullscreen = useReaderFullscreen(!!selectedId);
@@ -466,12 +467,21 @@ export function App() {
         contentHash: hash,
         rendererVersion: RENDERER_VERSION,
       };
-      await db.books.add(book);
+      const stored = await db.transaction("rw", db.books, async () => {
+        const match = await db.books.where("contentHash").equals(hash).first();
+        if (match) return match;
+        await db.books.add(book);
+        return book;
+      });
       await refresh();
-      setChapter(0);
-      setSelectedId(book.id);
+      setChapter(stored.chapter);
+      setSelectedId(stored.id);
       setFilter("all");
-      setNotice("Added to your private library.");
+      setNotice(
+        stored.id === book.id
+          ? "Added to your private library."
+          : "This book is already in your library. Your saved place and notes are preserved.",
+      );
     } catch (e) {
       setError(
         e instanceof Error && e.name === "QuotaExceededError"
@@ -1358,7 +1368,7 @@ export function App() {
           const file = e.target.files?.[0];
           e.target.value = "";
           if (file)
-            void (async () => {
+            void (restoreQueue.current = restoreQueue.current.then(async () => {
               setBusy("Restoring your library…");
               try {
                 const result = await restoreLibrary(file);
@@ -1372,7 +1382,7 @@ export function App() {
               } finally {
                 setBusy("");
               }
-            })();
+            }));
         }}
       />
       {!selectedId ? (

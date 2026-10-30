@@ -197,6 +197,7 @@ test("library backup restores original books, saved places and notes without dup
   await page.getByRole("button", { name: "Close dialog" }).click();
   await page.getByRole("button", { name: "Remove The Quiet Atlas" }).click();
   await page.getByRole("button", { name: "Remove book", exact: true }).click();
+  await expect(page.locator(".book-card")).toHaveCount(0);
   await page.getByLabel("Restore library file").setInputFiles({
     name: "backup.folio",
     mimeType: "application/zip",
@@ -205,6 +206,9 @@ test("library backup restores original books, saved places and notes without dup
   await expect(
     page.getByRole("button", { name: "Read The Quiet Atlas" }),
   ).toHaveCount(1);
+  await expect(page.locator(".toast[role=status]")).toContainText(
+    "Restored 1 books",
+  );
   await page.getByLabel("Restore library file").setInputFiles({
     name: "backup.folio",
     mimeType: "application/zip",
@@ -318,4 +322,74 @@ test("library, reader and settings have no serious or critical axe violations", 
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.getByRole("button", { name: "Back to library" }).click();
   await check();
+});
+
+test("restoring the same backup in two tabs merges originals and keeps annotation book IDs valid", async ({
+  page,
+  context,
+}) => {
+  await sample(page);
+  await selectPassage(page);
+  await page.getByRole("button", { name: "Bookmark", exact: true }).click();
+  await page.getByRole("button", { name: "Back to library" }).click();
+  await page.getByRole("button", { name: "Storage & backup" }).click();
+  const event = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Back up library", exact: true })
+    .click();
+  const file = await event,
+    buffer = await readFile((await file.path())!);
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Remove The Quiet Atlas" }).click();
+  await page.getByRole("button", { name: "Remove book", exact: true }).click();
+  await expect(page.locator(".book-card")).toHaveCount(0);
+  const other = await context.newPage();
+  await other.goto("/reader.html");
+  await Promise.all(
+    [page, other].map((tab) =>
+      tab.getByLabel("Restore library file").setInputFiles({
+        name: "library.folio",
+        mimeType: "application/zip",
+        buffer,
+      }),
+    ),
+  );
+  for (const tab of [page, other]) {
+    await expect(tab.locator(".toast[role=status]")).toContainText(
+      /Restored [01] books/,
+    );
+    await expect(tab.locator(".busy-banner")).toHaveCount(0);
+    await expect(tab.locator(".book-card")).toHaveCount(1);
+  }
+  const saved = await page.evaluate(
+    async () =>
+      new Promise<{ books: number; marks: number; valid: boolean }>(
+        (resolve, reject) => {
+          const request = indexedDB.open("folio-library");
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            const db = request.result,
+              tx = db.transaction(["books", "marks"]),
+              books = tx.objectStore("books").getAll(),
+              marks = tx.objectStore("marks").getAll();
+            tx.oncomplete = () => {
+              const ids = new Set(
+                books.result.map((book: { id: string }) => book.id),
+              );
+              resolve({
+                books: ids.size,
+                marks: marks.result.length,
+                valid: marks.result.every((mark: { bookId: string }) =>
+                  ids.has(mark.bookId),
+                ),
+              });
+              db.close();
+            };
+            tx.onerror = () => reject(tx.error);
+          };
+        },
+      ),
+  );
+  expect(saved).toEqual({ books: 1, marks: 2, valid: true });
+  await other.close();
 });

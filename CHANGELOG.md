@@ -10,6 +10,7 @@
 - Extended backups to version 2 for mixed-format originals, while retaining version 1 restore support. Extended configured Drive imports to supported formats.
 - Bundled local PDF workers/fonts/CMaps/ICC/decoder assets and DjVu WASM with license notices; added reproducible fixes for known edge cases in the pinned MOBI parser.
 - Added format, fullscreen, large-range-path and Pages-subpath regression coverage.
+- Queued restore actions through completion and rechecked content hashes transactionally to prevent duplicate books during concurrent restore/import.
 
 ## 0.3.0 — Rendering and data safety
 

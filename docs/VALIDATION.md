@@ -30,7 +30,7 @@ A separate three-test browser suite exercises the production web build at `/EPUB
 
 Four additional browser scenarios use an 80-paragraph EPUB chapter. They verify multi-page horizontal layout and counts, page turns without chapter jumps, exact page restoration after reopening, background chapter counts and book totals, reflow with a preserved passage, persistent font/theme/direction settings, multiple page bookmarks in one chapter, keyboard crossing of chapter boundaries, swipe turns, resize-driven repagination and narrow-screen layout. The original annotation/OCR/print tests remain in place and use the new page viewport where relevant.
 
-The full suite now contains 29 reader tests and 5 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
+The full suite now contains 30 reader tests and 5 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
 
 ## Audit regressions
 
@@ -45,3 +45,5 @@ The [audit response](AUDIT_RESPONSE.md) distinguishes completed changes from def
 Eight new reader scenarios cover Markdown headings/tables/code and script/remote-resource isolation, DRM-free MOBI/PalmDOC metadata/chapters/images and body-boundary edge cases, PDF text selection/zoom/bookmark/resume/original-byte download, DjVu IW44/JB2/embedded-text reading, mixed-format backup/delete/restore, fullscreen/keyboard exit/passage preservation, a fullscreen API fallback and the larger-file DjVu Blob-range path. The last uses a small original DjVu fixture padded with an ignored IFF chunk beyond 64 MB; this verifies the alternate loading path, **not** performance on a complex 64 MB publication.
 
 Two new Pages tests check PDF/DjVu workers and WASM and MOBI/Markdown/fullscreen behavior under `/EPUBchrome/`. The MOBI6 tests include images, body attributes, missing closing tags and declared DRM rejection. KF8/hybrid support uses the library's separate parser but still needs a broader real-document corpus. Password-protected PDFs, unusual fonts/rotations, indirect DjVu, accessibility of every imported document and gigabyte-scale performance are not certified.
+
+Concurrent restore is also exercised in two tabs: identical originals merge and every annotation retains a valid book reference. Restore actions within a tab are queued through UI completion, with content-hash deduplication rechecked inside the database write transaction. Corpus navigation assertions wait for the requested source document rather than accepting the previous chapter’s page status.

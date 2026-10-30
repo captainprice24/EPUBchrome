@@ -352,8 +352,22 @@ export async function restoreLibrary(file: File) {
     }
     // Validate the entire archive before this transaction. A failed restore never
     // leaves a half-restored library or overwrites newer local notes/positions.
+    let restoredBooks = 0;
     await db.transaction("rw", db.books, db.marks, db.ocr, async () => {
-      await db.books.bulkAdd(imported);
+      // A second tab may have restored/imported the same file while we were
+      // validating it. Recheck inside the write transaction before inserting.
+      for (const book of imported) {
+        const match = book.contentHash
+          ? await db.books.where("contentHash").equals(book.contentHash).first()
+          : undefined;
+        if (match) {
+          for (const note of [...annotations, ...ocr])
+            if (note.bookId === book.id) note.bookId = match.id;
+        } else {
+          await db.books.add(book);
+          restoredBooks++;
+        }
+      }
       for (const mark of annotations)
         if (!(await db.marks.get(mark.id))) await db.marks.add(mark);
       for (const note of ocr)
@@ -363,7 +377,7 @@ export async function restoreLibrary(file: File) {
       ))
         await db.books.update(id, { rendererVersion: undefined });
     });
-    return { books: imported.length, notes: annotations.length + ocr.length };
+    return { books: restoredBooks, notes: annotations.length + ocr.length };
   } finally {
     await reader?.close();
   }

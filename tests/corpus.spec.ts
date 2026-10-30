@@ -55,14 +55,20 @@ test("IDPF Japanese sample retains Unicode IDs and renders successive content do
       `Chapter ${i + 2} of`,
     );
     await expect(page.locator(".page-count")).toContainText("Page 1 of");
+    await expect(doc.locator("[data-folio-html]")).toHaveAttribute(
+      "data-folio-html",
+      ["OEBPS/0001.xhtml", "OEBPS/0005.xhtml", "OEBPS/0006.xhtml"][i]!,
+    );
     if (i === 0)
-      expect(
-        await doc
-          .locator("[id]")
-          .evaluateAll((nodes) =>
-            nodes.some((node) => /[^\x00-\x7f]/.test(node.id)),
-          ),
-      ).toBe(true);
+      await expect
+        .poll(() =>
+          doc
+            .locator("[id]")
+            .evaluateAll((nodes) =>
+              nodes.some((node) => /[^\x00-\x7f]/.test(node.id)),
+            ),
+        )
+        .toBe(true);
   }
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
