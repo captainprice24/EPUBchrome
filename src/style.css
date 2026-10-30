@@ -1569,9 +1569,6 @@ a {
     gap: 20px;
     font-size: 12px;
   }
-  .library-footer > span:last-child {
-    display: none;
-  }
   .reader-top {
     padding: 0 12px;
     gap: 10px;

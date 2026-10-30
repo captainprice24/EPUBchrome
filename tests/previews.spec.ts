@@ -91,6 +91,7 @@ test("PDF and DjVu cards show actual first pages with uncropped cached images", 
       for (const width of [1440, 1000, 390, 320]) {
         await page.setViewportSize({ width, height: 1000 });
         const privacy = page.locator(".privacy-statement");
+        await expect(privacy).toBeVisible();
         await expect(privacy).toHaveText(
           "Your books, documents and notes stay in this browser.",
         );
