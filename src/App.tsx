@@ -44,6 +44,7 @@ import {
 } from "./locators";
 import { migrateLocators } from "./migrate-locators";
 import { contentHash } from "./content-hash";
+import { persistBooks } from "./binary-storage";
 import { backupLibrary, restoreLibrary } from "./backup";
 import { storageStatus } from "./storage";
 import {
@@ -476,8 +477,7 @@ export function App() {
         return;
       }
       parser = await openDocument(file, format, file.name);
-      await storageStatus(true);
-      const estimate = await navigator.storage.estimate();
+      const estimate = await storageStatus(true);
       if (
         estimate.quota &&
         file.size + (parser.prepared?.size || 0) >
@@ -511,12 +511,17 @@ export function App() {
         contentHash: hash,
         rendererVersion: RENDERER_VERSION,
       };
-      const stored = await db.transaction("rw", db.books, async () => {
-        const match = await db.books.where("contentHash").equals(hash).first();
-        if (match) return match;
-        await db.books.add(book);
-        return book;
-      });
+      const stored = await persistBooks([book], () =>
+        db.transaction("rw", db.books, async () => {
+          const match = await db.books
+            .where("contentHash")
+            .equals(hash)
+            .first();
+          if (match) return match;
+          await db.books.add(book);
+          return book;
+        }),
+      );
       await refresh();
       setChapter(stored.chapter);
       setSelectedId(stored.id);
@@ -2777,6 +2782,8 @@ export function App() {
               : ""}
           </p>
           <p className="fine-print">
+            Private browsing may remove your library when private tabs close.
+            Use a regular tab and keep backups for a lasting library.{" "}
             Persistence does not protect against clearing browser data,
             uninstalling the extension or losing this device. Keep a backup
             somewhere safe. Backups are not encrypted. Restore accepts archives

@@ -30,7 +30,7 @@ A separate three-test browser suite exercises the production web build at `/EPUB
 
 Four additional browser scenarios use an 80-paragraph EPUB chapter. They verify multi-page horizontal layout and counts, page turns without chapter jumps, exact page restoration after reopening, background chapter counts and book totals, reflow with a preserved passage, persistent font/theme/direction settings, multiple page bookmarks in one chapter, keyboard crossing of chapter boundaries, swipe turns, resize-driven repagination and narrow-screen layout. The original annotation/OCR/print tests remain in place and use the new page viewport where relevant.
 
-The full suite now contains 33 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
+The full suite now contains 36 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
 
 ## Audit regressions
 
@@ -51,3 +51,7 @@ Concurrent restore is also exercised in two tabs: identical originals merge and 
 ## Library and fullscreen UI regressions (v0.4.1)
 
 Three additional reader scenarios verify fullscreen bookmark/highlight creation and navigation on desktop and a 390px fallback view, including paragraph-boundary selections, accessibility checks and saved notes after reopening. Category coverage verifies older EPUB records without format metadata, default document categorization, manual moves without losing bookmarks, reload persistence and bounded long titles. A deliberately delayed PDF worker verifies that leaving an unfinished open does not lock library imports. The mixed-format backup test now also restores a manual category override. An additional Pages test verifies book-first copy, separate shelves, banner contrast and long-title layout at desktop/mobile widths.
+
+## Blob/File storage compatibility (v0.4.2)
+
+Three additional reader scenarios inject the reported “Error preparing Blob/File data to be stored in object store” at the IndexedDB boundary. They verify PDF original-byte downloads, physical pages, highlights/bookmarks, reloads and backup/restore; EPUB covers and Markdown derived copies through reading-position/category updates; and a clear oversized-compatibility error without deleting an existing book or bookmark. Synthetic fixtures are original project material. These injected failures are regression coverage, not a claim of reproducing a particular iPhone Safari build or private session.

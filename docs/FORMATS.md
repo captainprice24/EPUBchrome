@@ -28,6 +28,12 @@ Folio is an EPUB-first book library. EPUB and MOBI appear under **Books** by def
 
 Use the toolbar button or **F**. **Esc** and **Exit fullscreen** leave the mode. Contents, **Bookmark**, **Notes**, Settings, page controls and fixed-page zoom remain available. Select text and choose **Highlight** to save a passage; **Notes** opens the saved-bookmark and highlight tabs without leaving fullscreen. Browsers without the Fullscreen API use distraction-free reading within the current tab; they cannot hide browser/OS chrome. Entering/exiting fullscreen preserves the saved text passage instead of replacing it with the start of a newly laid-out page.
 
+## Browser storage compatibility
+
+If the browser rejects saving Blob/File objects, Folio retries with local typed byte chunks. Original bytes and MIME types are preserved, with the same reading, note and backup behavior. Existing native-Blob library records remain readable; no library reset or document conversion is needed. The compatibility representation requires Folio 0.4.2 or newer, so reload older open Folio tabs before using those items.
+
+This fallback has a **64 MB per-item budget**, including the original, cover and derived reading copy. It is an input/memory guard, not a performance guarantee. The normal Blob path retains the format limits above. For larger items rejected by compatibility storage, try a regular browsing tab or the Chrome extension. A private browsing library can disappear when the private session ends; use a regular tab and backups for durable storage. A failure to save does not upload or alter the original file.
+
 ## Backups and originals
 
 Folio 0.4 writes `.folio` **version 2** backups containing original files, declared formats, names, positions, annotations, OCR and covers. Derived reading caches are omitted and rebuilt on restore. It also restores **version 1** EPUB-only backups. Older Folio builds cannot read version 2 archives; update the destination before restoring.

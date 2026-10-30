@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2 — Browser file-storage compatibility
+
+- Retried Blob/File-specific IndexedDB failures using typed byte chunks, preserving original file bytes, MIME types, covers and derived reading copies.
+- Kept metadata updates and library restore compatible with byte-backed items, including atomic retries and existing native-Blob libraries.
+- Added a 64 MB per-item limit for the compatibility path to bound memory use; native Blob storage retains the existing format limits.
+- Made import tolerate browsers without the Storage Estimate API and clarified private-browsing data lifetime in Storage & backup.
+
 ## 0.4.1 — Books first and usable fullscreen tools
 
 - Separated Books and Documents with automatic defaults for existing files, independent category counts and persistent manual moves included in backups.

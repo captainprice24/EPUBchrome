@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { TextLocator } from "./locators";
 import type { DocumentFormat } from "./document-types";
+import { hydrateBook, installBinaryStorage } from "./binary-storage";
 export type LibraryCollection = "books" | "documents";
 export interface Book {
   collection?: LibraryCollection;
@@ -82,6 +83,8 @@ db.version(2).stores({
   marks: "id,bookId,kind,[bookId+chapter]",
   ocr: "id,bookId,[bookId+chapter]",
 });
+installBinaryStorage(db);
+db.books.hook("reading", hydrateBook);
 export async function removeBook(id: string) {
   await db.transaction("rw", db.books, db.marks, db.ocr, async () => {
     await db.books.delete(id);

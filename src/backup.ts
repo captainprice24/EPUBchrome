@@ -16,6 +16,7 @@ import {
 } from "./store";
 import { contentHash } from "./content-hash";
 import { storageStatus } from "./storage";
+import { persistBooks } from "./binary-storage";
 import type { TextLocator } from "./locators";
 import { openDocument } from "./documents";
 import { mimeTypes, type DocumentFormat } from "./document-types";
@@ -361,31 +362,37 @@ export async function restoreLibrary(file: File) {
     }
     // Validate the entire archive before this transaction. A failed restore never
     // leaves a half-restored library or overwrites newer local notes/positions.
-    let restoredBooks = 0;
-    await db.transaction("rw", db.books, db.marks, db.ocr, async () => {
-      // A second tab may have restored/imported the same file while we were
-      // validating it. Recheck inside the write transaction before inserting.
-      for (const book of imported) {
-        const match = book.contentHash
-          ? await db.books.where("contentHash").equals(book.contentHash).first()
-          : undefined;
-        if (match) {
-          for (const note of [...annotations, ...ocr])
-            if (note.bookId === book.id) note.bookId = match.id;
-        } else {
-          await db.books.add(book);
-          restoredBooks++;
+    const restoredBooks = await persistBooks(imported, () =>
+      db.transaction("rw", db.books, db.marks, db.ocr, async () => {
+        let restoredBooks = 0;
+        // A second tab may have restored/imported the same file while we were
+        // validating it. Recheck inside the write transaction before inserting.
+        for (const book of imported) {
+          const match = book.contentHash
+            ? await db.books
+                .where("contentHash")
+                .equals(book.contentHash)
+                .first()
+            : undefined;
+          if (match) {
+            for (const note of [...annotations, ...ocr])
+              if (note.bookId === book.id) note.bookId = match.id;
+          } else {
+            await db.books.add(book);
+            restoredBooks++;
+          }
         }
-      }
-      for (const mark of annotations)
-        if (!(await db.marks.get(mark.id))) await db.marks.add(mark);
-      for (const note of ocr)
-        if (!(await db.ocr.get(note.id))) await db.ocr.add(note);
-      for (const id of new Set(
-        annotations.filter((m) => !m.locator).map((m) => m.bookId),
-      ))
-        await db.books.update(id, { rendererVersion: undefined });
-    });
+        for (const mark of annotations)
+          if (!(await db.marks.get(mark.id))) await db.marks.add(mark);
+        for (const note of ocr)
+          if (!(await db.ocr.get(note.id))) await db.ocr.add(note);
+        for (const id of new Set(
+          annotations.filter((m) => !m.locator).map((m) => m.bookId),
+        ))
+          await db.books.update(id, { rendererVersion: undefined });
+        return restoredBooks;
+      }),
+    );
     return { books: restoredBooks, notes: annotations.length + ocr.length };
   } finally {
     await reader?.close();
