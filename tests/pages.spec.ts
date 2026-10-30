@@ -64,7 +64,7 @@ test("Pages OCR finds its packaged worker and model under the repository prefix"
   ]);
   await page.goto("/EPUBchrome/");
   await page
-    .locator("input[type=file]")
+    .getByLabel("Import EPUB file")
     .setInputFiles(path.resolve("test-results/fixtures/scan.epub"));
   await expect(
     page

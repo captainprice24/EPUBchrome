@@ -4,7 +4,7 @@ export type ReadingTheme = "paper" | "sepia" | "night";
 export interface ReadingSettings {
   mode: ReadingMode;
   size: number;
-  font: "literary" | "classic" | "modern";
+  font: "publisher" | "literary" | "classic" | "modern";
   lineHeight: number;
   margin: "narrow" | "comfortable" | "wide";
   theme: ReadingTheme;
@@ -17,6 +17,7 @@ export interface PageSnapshot {
   key: string;
 }
 export const fontFamilies = {
+  publisher: 'Georgia, "Times New Roman", serif',
   literary: 'Georgia, "Times New Roman", serif',
   classic: '"Palatino Linotype", "Book Antiqua", Palatino, serif',
   modern: '-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
@@ -28,6 +29,7 @@ export const themes = {
 };
 export function layoutKey(s: ReadingSettings, w: number, h: number) {
   return JSON.stringify([
+    3, // Publisher layout and text locator generation.
     s.mode,
     s.size,
     s.font,
@@ -47,7 +49,7 @@ html,body{height:100%!important;width:100%!important;margin:0!important;padding:
 #folio-viewport{position:fixed!important;inset:0!important;outline:none;overscroll-behavior:contain;background:var(--folio-bg);scroll-behavior:auto!important}
 #folio-track{position:relative!important;box-sizing:border-box!important;margin:0!important;padding:0!important}
 #folio-content{box-sizing:border-box!important;margin:0 auto!important;padding:var(--folio-y,40px) var(--folio-x,56px)!important;max-width:none!important;font-family:var(--folio-font,Georgia,serif)!important;font-size:var(--folio-size,20px)!important;line-height:var(--folio-leading,1.7)!important;overflow-wrap:anywhere!important;color:var(--folio-fg)!important;background:var(--folio-bg)!important}
-#folio-content p,#folio-content li,#folio-content blockquote,#folio-content dd,#folio-content dt{font-family:inherit!important;font-size:1em!important;line-height:inherit!important}#folio-content h1,#folio-content h2,#folio-content h3{font-family:inherit!important;line-height:1.25!important}#folio-content p{margin:0 0 1.25em!important}#folio-content img,#folio-content svg{max-width:100%!important;max-height:calc(var(--folio-h) - 2 * var(--folio-y))!important;object-fit:contain}#folio-content pre{white-space:pre-wrap!important;overflow-wrap:anywhere}#folio-content table{max-width:100%!important;table-layout:fixed}#folio-content h1{font-size:1.9em!important}#folio-content h2{font-size:1.5em!important}
+#folio-content p,#folio-content li,#folio-content blockquote,#folio-content dd,#folio-content dt{font-size:1em!important;line-height:inherit!important}#folio-content h1,#folio-content h2,#folio-content h3{line-height:1.25!important}:where(#folio-content p){margin:0 0 1.25em}html[data-typography="custom"] #folio-content :is(p,li,blockquote,dd,dt,h1,h2,h3,[data-folio-html],[data-folio-body]){font-family:var(--folio-font)!important}#folio-content [data-folio-html],#folio-content [data-folio-body]{font-size:inherit!important;line-height:inherit!important;color:inherit!important;background:transparent!important}#folio-content img,#folio-content svg{max-width:100%!important;max-height:calc(var(--folio-h) - 2 * var(--folio-y))!important;object-fit:contain}#folio-content pre{white-space:pre-wrap!important;overflow-wrap:anywhere}#folio-content table{max-width:100%!important;table-layout:fixed}#folio-content h1{font-size:1.9em!important}#folio-content h2{font-size:1.5em!important}
 html[data-reading-mode="horizontal"] #folio-viewport{overflow-x:auto!important;overflow-y:hidden!important;scrollbar-width:none;touch-action:pan-y}
 html[data-reading-mode="horizontal"] #folio-content{height:calc(var(--folio-h) - 2 * var(--folio-y))!important;width:var(--folio-w)!important;padding:0 var(--folio-x)!important;margin:var(--folio-y) 0!important;column-width:calc(var(--folio-w) - 2 * var(--folio-x))!important;column-gap:calc(2 * var(--folio-x))!important;column-fill:auto!important;column-count:auto!important}
 html[data-reading-mode="vertical"] #folio-viewport{overflow-y:auto!important;overflow-x:hidden!important;touch-action:pan-y}
@@ -135,6 +137,8 @@ export class Paginator {
           delta = 1;
         if (this.settings.mode === "vertical" && e.key === "ArrowUp")
           delta = -1;
+        if (this.rtl && ["ArrowRight", "ArrowLeft"].includes(e.key))
+          delta *= -1;
         if (delta) {
           e.preventDefault();
           this.turn(delta);
@@ -197,7 +201,7 @@ export class Paginator {
             const dx = t.clientX - this.touch.x,
               dy = t.clientY - this.touch.y;
             if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy))
-              this.turn(dx < 0 ? 1 : -1);
+              this.turn((dx < 0 ? 1 : -1) * (this.rtl ? -1 : 1));
           }
           this.touch = undefined;
         },
@@ -217,6 +221,17 @@ export class Paginator {
   private apply() {
     const root = this.doc.documentElement;
     root.dataset.readingMode = this.settings.mode;
+    root.dataset.typography =
+      this.settings.font === "publisher" ? "publisher" : "custom";
+    const publisher =
+      this.doc.querySelector<HTMLElement>("[data-folio-body]") ||
+      this.doc.querySelector<HTMLElement>("[data-folio-html]");
+    const rtl =
+      publisher &&
+      this.doc.defaultView?.getComputedStyle(publisher).direction === "rtl";
+    this.viewport.dir = rtl ? "rtl" : "ltr";
+    this.track.dir = this.viewport.dir;
+    this.content.dir = this.viewport.dir;
     const width = this.viewport.clientWidth,
       height = this.viewport.clientHeight;
     const minimum = { narrow: 22, comfortable: 44, wide: 76 }[
@@ -238,6 +253,15 @@ export class Paginator {
     };
     for (const [k, v] of Object.entries(values)) root.style.setProperty(k, v);
     root.style.colorScheme = this.settings.theme === "night" ? "dark" : "light";
+  }
+  private get rtl() {
+    return this.viewport.dir === "rtl";
+  }
+  get rightToLeft() {
+    return this.rtl;
+  }
+  private get scrollX() {
+    return (this.rtl ? -1 : 1) * this.viewport.scrollLeft;
   }
   private rebuildNodes() {
     this.nodes = [];
@@ -345,7 +369,8 @@ export class Paginator {
       view = this.viewport.getBoundingClientRect();
     const axis =
       this.settings.mode === "horizontal"
-        ? rect.left - view.left + this.viewport.scrollLeft
+        ? (this.rtl ? view.right - rect.right : rect.left - view.left) +
+          this.scrollX
         : rect.top - view.top + this.viewport.scrollTop;
     const size =
       this.settings.mode === "horizontal"
@@ -365,7 +390,10 @@ export class Paginator {
       this.doc as Document & {
         caretRangeFromPoint?: (x: number, y: number) => Range | null;
       }
-    ).caretRangeFromPoint?.(view.left + x + 2, view.top + y + 3);
+    ).caretRangeFromPoint?.(
+      this.rtl ? view.right - x - 2 : view.left + x + 2,
+      view.top + y + 3,
+    );
     if (caret) {
       const start = this.starts.get(caret.startContainer);
       if (start !== undefined) return start + caret.startOffset;
@@ -397,7 +425,7 @@ export class Paginator {
         : this.viewport.clientHeight;
     const scroll =
       this.settings.mode === "horizontal"
-        ? this.viewport.scrollLeft
+        ? this.scrollX
         : this.viewport.scrollTop;
     this.current = Math.min(
       this.total,
@@ -421,7 +449,8 @@ export class Paginator {
     this.current = Math.max(1, Math.min(this.total, Math.round(page)));
     if (this.settings.mode === "horizontal")
       this.viewport.scrollTo({
-        left: (this.current - 1) * this.viewport.clientWidth,
+        left:
+          (this.rtl ? -1 : 1) * (this.current - 1) * this.viewport.clientWidth,
         top: 0,
         behavior: "instant",
       });
@@ -441,7 +470,8 @@ export class Paginator {
       view = this.viewport.getBoundingClientRect();
     const axis =
       this.settings.mode === "horizontal"
-        ? rect.left - view.left + this.viewport.scrollLeft
+        ? (this.rtl ? view.right - rect.right : rect.left - view.left) +
+          this.scrollX
         : rect.top - view.top + this.viewport.scrollTop;
     this.goToPage(
       1 +

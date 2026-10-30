@@ -1,5 +1,6 @@
 import { defineConfig } from "wxt";
 import { loadEnv } from "vite";
+import { version } from "./package.json";
 export default defineConfig({
   manifest: ({ mode }) => {
     const clientId = loadEnv(mode, process.cwd(), "WXT_").WXT_GOOGLE_CLIENT_ID;
@@ -7,10 +8,16 @@ export default defineConfig({
       name: "Folio — EPUB reading room",
       description:
         "A private reading room for EPUBs. Chapters, bookmarks, highlights, local OCR and PDF printing.",
-      version: "0.2.0",
+      version,
       action: { default_title: "Open Folio" },
-      permissions: ["storage", "identity"],
-      host_permissions: ["https://www.googleapis.com/*"],
+      permissions: [
+        "storage",
+        "unlimitedStorage",
+        ...(clientId ? ["identity"] : []),
+      ],
+      ...(clientId
+        ? { host_permissions: ["https://www.googleapis.com/*"] }
+        : {}),
       ...(clientId
         ? {
             oauth2: {

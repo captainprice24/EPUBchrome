@@ -28,6 +28,7 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           node --input-type=module -e 'import { chromium } from "@playwright/test"; console.log("CHROMIUM_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
+      - run: npm run format:check
       - run: npm run typecheck
       - run: npm run build
       - run: npm test

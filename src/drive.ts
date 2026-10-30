@@ -3,11 +3,15 @@ export async function driveImport(
   onProgress: (s: string) => void,
   signal: AbortSignal,
 ) {
-  if (typeof chrome === "undefined" || !chrome.identity?.getAuthToken)
+  if (typeof chrome === "undefined" || !chrome.runtime?.getManifest)
     throw Error("Google Drive is available in the installed Chrome extension.");
   if (!chrome.runtime.getManifest().oauth2?.client_id)
     throw Error(
       "Google Drive is not configured in this build. See the Google Drive setup instructions in the project README. Local files work without an account.",
+    );
+  if (!chrome.identity?.getAuthToken)
+    throw Error(
+      "Chrome sign-in is unavailable. Check the extension permissions.",
     );
   const match = input.match(/\/d\/([\w-]+)/) || input.match(/[?&]id=([\w-]+)/);
   const id = match?.[1] || input.trim();

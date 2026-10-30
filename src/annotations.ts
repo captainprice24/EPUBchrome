@@ -1,15 +1,5 @@
 import type { Mark } from "./store";
-function nodes(doc: Document) {
-  const w = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) =>
-      n.parentElement?.closest("style,script")
-        ? NodeFilter.FILTER_REJECT
-        : NodeFilter.FILTER_ACCEPT,
-  });
-  const out: Text[] = [];
-  while (w.nextNode()) out.push(w.currentNode as Text);
-  return out;
-}
+import { textNodes as nodes, documentText, resolveLocator } from "./locators";
 export function selectionOffsets(doc: Document) {
   const s = doc.getSelection();
   if (!s?.rangeCount || s.isCollapsed) return null;
@@ -27,11 +17,27 @@ export function selectionOffsets(doc: Document) {
   return { start, end, text: s.toString().slice(0, 10000) };
 }
 export function applyHighlights(doc: Document, marks: Mark[]) {
+  const unresolved: string[] = [];
   for (const m of Array.from(doc.querySelectorAll("mark[data-folio]"))) {
     m.replaceWith(...m.childNodes);
   }
   doc.body.normalize();
-  for (const mark of [...marks].sort(
+  const text = documentText(doc);
+  const href = doc
+    .querySelector("[data-folio-html]")
+    ?.getAttribute("data-folio-html");
+  const resolved = marks.flatMap((mark) => {
+    const range =
+      mark.locator && mark.locator.spineHref === href
+        ? resolveLocator(text, mark.locator)
+        : null;
+    if (!range) {
+      unresolved.push(mark.id);
+      return [];
+    }
+    return [{ ...mark, ...range }];
+  });
+  for (const mark of [...resolved].sort(
     (a, b) => (b.start || 0) - (a.start || 0),
   )) {
     if (mark.start === undefined || mark.end === undefined) continue;
@@ -52,4 +58,5 @@ export function applyHighlights(doc: Document, marks: Mark[]) {
       range.surroundContents(el);
     }
   }
+  return unresolved;
 }

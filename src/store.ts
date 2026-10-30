@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
+import type { TextLocator } from "./locators";
 export interface Book {
   id: string;
   title: string;
@@ -16,6 +17,9 @@ export interface Book {
   page?: number;
   pageCount?: number;
   readingMode?: "horizontal" | "vertical";
+  locator?: TextLocator;
+  rendererVersion?: number;
+  contentHash?: string;
 }
 export interface Mark {
   id: string;
@@ -32,8 +36,11 @@ export interface Mark {
   page?: number;
   pageCount?: number;
   readingMode?: "horizontal" | "vertical";
+  locator?: TextLocator;
+  unresolved?: boolean;
 }
 export interface OCRNote {
+  imagePath?: string;
   id: string;
   bookId: string;
   chapter: number;
@@ -48,6 +55,11 @@ export const db = new Dexie("folio-library") as Dexie & {
 };
 db.version(1).stores({
   books: "id,lastRead,added",
+  marks: "id,bookId,kind,[bookId+chapter]",
+  ocr: "id,bookId,[bookId+chapter]",
+});
+db.version(2).stores({
+  books: "id,lastRead,added,contentHash",
   marks: "id,bookId,kind,[bookId+chapter]",
   ocr: "id,bookId,[bookId+chapter]",
 });

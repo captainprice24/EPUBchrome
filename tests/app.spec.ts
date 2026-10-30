@@ -78,7 +78,7 @@ test("unsafe content is isolated and malformed imports leave library usable", as
   page.on("request", (r) => {
     if (r.url().includes("blocked.invalid")) requests.push(r.url());
   });
-  await page.locator("input[type=file]").setInputFiles(fixture("unsafe"));
+  await page.getByLabel("Import EPUB file").setInputFiles(fixture("unsafe"));
   const doc = page.frameLocator('iframe[title="Book chapter"]');
   await expect(
     doc.getByRole("heading", { name: "A slower beginning" }),
@@ -89,7 +89,7 @@ test("unsafe content is isolated and malformed imports leave library usable", as
   ).toBeNull();
   expect(requests).toEqual([]);
   await page.getByRole("button", { name: "Back to library" }).click();
-  await page.locator("input[type=file]").setInputFiles(fixture("missing"));
+  await page.getByLabel("Import EPUB file").setInputFiles(fixture("missing"));
   await expect(page.getByRole("alert")).toContainText("Missing book resource");
   await expect(
     page.getByRole("button", { name: "Read The Quiet Atlas" }),
@@ -107,7 +107,7 @@ test("local browser OCR recognizes a scan with packaged worker, WASM and model",
   await imagePage.close();
   execFileSync("python3", ["scripts/fixtures.py", "test-results/scan.png"]);
   await page.goto("/reader.html");
-  await page.locator("input[type=file]").setInputFiles(fixture("scan"));
+  await page.getByLabel("Import EPUB file").setInputFiles(fixture("scan"));
   await expect(
     page
       .frameLocator('iframe[title="Book chapter"]')
@@ -120,6 +120,26 @@ test("local browser OCR recognizes a scan with packaged worker, WASM and model",
   await expect(
     page.getByRole("textbox", { name: "Recognized text" }),
   ).toHaveValue(/READING IS A JOY/, { timeout: 50000 });
+  await page
+    .getByRole("textbox", { name: "Recognized text" })
+    .fill("READING IS A JOY — corrected locally");
+  await page.getByRole("button", { name: "Save edits", exact: true }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Your edits were saved" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Open OCR" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Recognized text" }),
+  ).toHaveValue("READING IS A JOY — corrected locally");
+  await page.getByLabel("IMAGE IN THIS CHAPTER").selectOption("1");
+  await expect(
+    page.getByRole("textbox", { name: "Recognized text" }),
+  ).toHaveCount(0);
+  await page.getByLabel("IMAGE IN THIS CHAPTER").selectOption("0");
+  await expect(
+    page.getByRole("textbox", { name: "Recognized text" }),
+  ).toHaveValue("READING IS A JOY — corrected locally");
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Save text" }).click();
   expect((await download).suggestedFilename()).toBe("recognized-text.txt");
@@ -182,9 +202,9 @@ test("archive size metadata and traversal paths are rejected before extraction",
 }) => {
   execFileSync("python3", ["scripts/fixtures.py"]);
   await page.goto("/reader.html");
-  await page.locator("input[type=file]").setInputFiles(fixture("limits"));
+  await page.getByLabel("Import EPUB file").setInputFiles(fixture("limits"));
   await expect(page.getByRole("alert")).toContainText("expanded book exceeds");
-  await page.locator("input[type=file]").setInputFiles(fixture("traversal"));
+  await page.getByLabel("Import EPUB file").setInputFiles(fixture("traversal"));
   await expect(page.getByRole("alert")).toContainText(
     /Unsafe (archive path|filename)/,
   );

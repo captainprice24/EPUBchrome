@@ -1,12 +1,13 @@
 import {
   useCallback,
+  useId,
   useMemo,
   useEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { createWorker, type Worker } from "tesseract.js";
+import type { Worker } from "tesseract.js";
 import {
   db,
   asset,
@@ -21,6 +22,17 @@ import { Epub, readerDocument, type Rendered } from "./epub";
 import { applyHighlights, selectionOffsets } from "./annotations";
 import { driveImport } from "./drive";
 import { Icon } from "./icons";
+import {
+  documentText,
+  quoteLocator,
+  resolveLocator,
+  RENDERER_VERSION,
+  type TextLocator,
+} from "./locators";
+import { migrateLocators } from "./migrate-locators";
+import { contentHash } from "./content-hash";
+import { backupLibrary, restoreLibrary } from "./backup";
+import { storageStatus } from "./storage";
 import {
   Paginator,
   ChapterCounter,
@@ -41,16 +53,21 @@ function Modal({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const old = document.activeElement as HTMLElement;
     const box = ref.current;
-    box?.querySelector<HTMLElement>("button,input,select")?.focus();
+    (
+      box?.querySelector<HTMLElement>(
+        "input:not(:disabled),select:not(:disabled),textarea:not(:disabled),.modal-actions button:not(:disabled)",
+      ) || box?.querySelector<HTMLElement>("button")
+    )?.focus();
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key === "Tab" && box) {
         const items = Array.from(
           box.querySelectorAll<HTMLElement>(
-            "button:not(:disabled),input,select,a[href]",
+            "button:not(:disabled),input:not(:disabled):not([type=hidden]),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex='0']",
           ),
         );
         const first = items[0],
@@ -82,10 +99,10 @@ function Modal({
         ref={ref}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby={titleId}
       >
         <header>
-          <h2>{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button
             className="icon-btn"
             aria-label="Close dialog"
@@ -165,7 +182,7 @@ export function App() {
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [modal, setModal] = useState<
-      "drive" | "print" | "ocr" | "delete" | "reading" | null
+      "drive" | "print" | "ocr" | "delete" | "reading" | "storage" | null
     >(null),
     [deleteId, setDeleteId] = useState<string | null>(null);
   const [chapter, setChapter] = useState(0),
@@ -190,7 +207,9 @@ export function App() {
   );
   const [fontChoice, setFontChoice] = useState<ReadingSettings["font"]>(() => {
     const f = localStorage.getItem("folio-reading-font");
-    return f === "classic" || f === "modern" ? f : "literary";
+    return f === "classic" || f === "modern" || f === "literary"
+      ? f
+      : "publisher";
   });
   const [spacing, setSpacing] = useState(() => {
     const n = Number(localStorage.getItem("folio-spacing"));
@@ -202,12 +221,29 @@ export function App() {
   });
   const [theme, setTheme] = useState<ReadingTheme>(() => {
     const t = localStorage.getItem("folio-theme");
-    return t === "sepia" || t === "night"
+    return t === "paper" || t === "sepia" || t === "night"
       ? t
       : localStorage.getItem("folio-dark") === "true"
         ? "night"
-        : "paper";
+        : window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "night"
+          : "paper";
   });
+  const lastLightTheme = useRef<ReadingTheme>(
+    localStorage.getItem("folio-light-theme") === "sepia" ? "sepia" : "paper",
+  );
+  const [backupScope, setBackupScope] = useState("");
+  const [storage, setStorage] = useState<Awaited<
+    ReturnType<typeof storageStatus>
+  > | null>(null);
+  const [orphanIds, setOrphanIds] = useState<string[]>([]);
+  const [returnLocation, setReturnLocation] = useState<{
+    chapter: number;
+    offset: number;
+  } | null>(null);
+  const resumeLocator = useRef<TextLocator | undefined>(undefined);
+  const restoreInput = useRef<HTMLInputElement>(null);
+  const [ocrNoteId, setOcrNoteId] = useState<string | null>(null);
   const dark = theme === "night";
   const settings = useMemo<ReadingSettings>(
     () => ({
@@ -235,6 +271,8 @@ export function App() {
     [ocrProgress, setOcrProgress] = useState(""),
     [ocrBusy, setOcrBusy] = useState(false),
     [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
+  const ocrBusyRef = useRef(false);
+  ocrBusyRef.current = ocrBusy;
   const input = useRef<HTMLInputElement>(null),
     frame = useRef<HTMLIFrameElement>(null),
     worker = useRef<Worker | null>(null),
@@ -267,7 +305,10 @@ export function App() {
   }, [refresh]);
   useEffect(() => {
     localStorage.setItem("folio-font", String(font));
-    localStorage.setItem("folio-dark", String(dark));
+    if (theme !== "night") {
+      lastLightTheme.current = theme;
+      localStorage.setItem("folio-light-theme", theme);
+    }
     localStorage.setItem("folio-reading-mode", mode);
     localStorage.setItem("folio-reading-font", fontChoice);
     localStorage.setItem("folio-spacing", String(spacing));
@@ -302,7 +343,10 @@ export function App() {
       setError("This version supports EPUB files up to 1 GB.");
       return;
     }
-    if (!file.name.toLowerCase().endsWith(".epub")) {
+    if (
+      !file.name.toLowerCase().endsWith(".epub") &&
+      file.type !== "application/epub+zip"
+    ) {
       setError("Choose a file ending in .epub.");
       return;
     }
@@ -311,6 +355,30 @@ export function App() {
     const parser = new Epub(file);
     try {
       await parser.open();
+      const hash = await contentHash(file);
+      let existing = await db.books.where("contentHash").equals(hash).first();
+      if (!existing) {
+        for (const candidate of await db.books
+          .filter((b) => !b.contentHash && b.size === file.size)
+          .toArray()) {
+          const candidateHash = await contentHash(candidate.blob);
+          await db.books.update(candidate.id, { contentHash: candidateHash });
+          if (candidateHash === hash) {
+            existing = candidate;
+            break;
+          }
+        }
+      }
+      if (existing) {
+        await refresh();
+        setChapter(existing.chapter);
+        setSelectedId(existing.id);
+        setNotice(
+          "This book is already in your library. Your saved place and notes are preserved.",
+        );
+        return;
+      }
+      await storageStatus(true);
       const estimate = await navigator.storage.estimate();
       if (estimate.quota && file.size > estimate.quota - (estimate.usage || 0))
         throw Error(
@@ -333,7 +401,9 @@ export function App() {
         chapter: 0,
         blob: file,
         cover,
-        chapterCount: parser.chapters.length,
+        chapterCount: parser.linearCount,
+        contentHash: hash,
+        rendererVersion: RENDERER_VERSION,
       };
       await db.books.add(book);
       await refresh();
@@ -342,7 +412,11 @@ export function App() {
       setFilter("all");
       setNotice("Added to your private library.");
     } catch (e) {
-      setError(message(e));
+      setError(
+        e instanceof Error && e.name === "QuotaExceededError"
+          ? "Browser storage is full. Back up your library, then free storage and try again."
+          : message(e),
+      );
     } finally {
       await parser.close().catch(() => {});
       setBusy("");
@@ -374,10 +448,12 @@ export function App() {
     setBusy("Opening your book…");
     setRendered(null);
     void (async () => {
-      const book = await db.books.get(selectedId);
+      let book = await db.books.get(selectedId);
       if (!book) throw Error("This book is no longer in the library.");
       parser = new Epub(book.blob);
       await parser.open();
+      book = await migrateLocators(book, parser);
+      await refresh();
       if (canceled) {
         await parser.close();
         return;
@@ -385,6 +461,8 @@ export function App() {
       setChapter(
         Math.max(0, Math.min(book.chapter, parser.chapters.length - 1)),
       );
+      resumeLocator.current = book.locator;
+      setReturnLocation(null);
       position.current = book.position || 0;
       textOffset.current = book.textOffset;
       requestedPage.current = undefined;
@@ -432,7 +510,7 @@ export function App() {
       .finally(() => {
         if (!cancel) setChapterLoading(false);
       });
-    if (selectedId)
+    if (selectedId && engine.chapters[chapter]?.linear)
       void db.books
         .update(selectedId, { chapter })
         .catch((e) => setError(message(e)));
@@ -444,9 +522,11 @@ export function App() {
   useEffect(() => {
     const doc = frame.current?.contentDocument;
     if (doc?.body)
-      applyHighlights(
-        doc,
-        currentMarks.filter((m) => m.kind === "highlight"),
+      setOrphanIds(
+        applyHighlights(
+          doc,
+          currentMarks.filter((m) => m.kind === "highlight"),
+        ),
       );
     paginator.current?.refresh();
   }, [marks, chapter]);
@@ -458,6 +538,7 @@ export function App() {
     textOffset.current = undefined;
     requestedPage.current = last ? "last" : undefined;
     jump.current = anchor || null;
+    resumeLocator.current = undefined;
     if (next === chapter && frame.current?.contentDocument) {
       const target = anchor
         ? frame.current.contentDocument.querySelector(
@@ -476,9 +557,11 @@ export function App() {
     if (!engine) return;
     const [path, fragment] = href.split("#");
     const i = engine.chapters.findIndex((c) => c.href === path);
-    if (i >= 0)
+    if (i >= 0) {
+      if (!engine.chapters[i]!.linear && engine.chapters[chapter]?.linear)
+        setReturnLocation({ chapter, offset: pageInfo?.offset || 0 });
       navigate(i, fragment ? decodeURIComponent(fragment) : undefined);
-    else setNotice("This link does not point to a readable chapter.");
+    } else setNotice("This link does not point to a readable chapter.");
   }
   function loaded() {
     const doc = frame.current?.contentDocument;
@@ -488,19 +571,39 @@ export function App() {
     const chapterIndex = chapter;
     const savedJump = jump.current;
     jump.current = null;
-    applyHighlights(
-      doc,
-      currentMarks.filter((m) => m.kind === "highlight"),
+    setOrphanIds(
+      applyHighlights(
+        doc,
+        currentMarks.filter((m) => m.kind === "highlight"),
+      ),
     );
+    const text = documentText(doc);
+    if (resumeLocator.current) {
+      const restored = resolveLocator(text, resumeLocator.current);
+      textOffset.current = restored?.start;
+      if (!restored)
+        setNotice(
+          "Your saved passage could not be located. The approximate reading position was restored.",
+        );
+      resumeLocator.current = undefined;
+    }
     paginator.current?.destroy();
     const controller = new Paginator(doc, settings, {
       offset: textOffset.current,
       progress: position.current,
       page: requestedPage.current,
       onBoundary: (direction) => {
-        if (direction < 0 && chapterIndex > 0)
+        if (
+          direction < 0 &&
+          chapterIndex > 0 &&
+          engine.chapters[chapterIndex]?.linear
+        )
           navigate(chapterIndex - 1, undefined, true);
-        if (direction > 0 && chapterIndex < engine.chapters.length - 1)
+        if (
+          direction > 0 &&
+          engine.chapters[chapterIndex]?.linear &&
+          chapterIndex < engine.linearCount - 1
+        )
           navigate(chapterIndex + 1);
       },
       onChange: (s) => {
@@ -524,16 +627,23 @@ export function App() {
           countsRef.current = counts;
           setChapterCounts(counts);
         }
-        void db.books
-          .update(bookId, {
-            chapter: chapterIndex,
-            position: s.progress,
-            textOffset: s.offset,
-            page: s.page,
-            pageCount: s.pages,
-            readingMode: doc.documentElement.dataset.readingMode as ReadingMode,
-          })
-          .catch((e) => setError(message(e)));
+        if (engine.chapters[chapterIndex]?.linear)
+          void db.books
+            .update(bookId, {
+              chapter: chapterIndex,
+              position: s.progress,
+              textOffset: s.offset,
+              locator: quoteLocator(
+                text,
+                engine.chapters[chapterIndex]!.href,
+                s.offset,
+              ),
+              page: s.page,
+              pageCount: s.pages,
+              readingMode: doc.documentElement.dataset
+                .readingMode as ReadingMode,
+            })
+            .catch((e) => setError(message(e)));
       },
     });
     paginator.current = controller;
@@ -576,6 +686,8 @@ export function App() {
     const counter = new ChapterCounter(dimensions.width, dimensions.height);
     setCounting(true);
     void (async () => {
+      await new Promise<void>((resolve) => setTimeout(resolve, 450));
+      if (canceled) return;
       const book = await db.books.get(selectedId);
       if (!book || canceled) return;
       const cached = book.pagination?.key === key ? book.pagination.counts : [];
@@ -591,7 +703,11 @@ export function App() {
       await parser.open();
       for (let i = 0; i < engine.chapters.length; i++) {
         if (canceled) break;
-        if (countsRef.current[i] || parser.chapterSize(i) > 2 * 1024 * 1024)
+        if (
+          !engine.chapters[i]!.linear ||
+          countsRef.current[i] ||
+          parser.chapterSize(i) > 2 * 1024 * 1024
+        )
           continue;
         await new Promise<void>((resolve) => setTimeout(resolve, 35));
         if (canceled) break;
@@ -644,21 +760,33 @@ export function App() {
         return;
       if (["ArrowRight", "PageDown"].includes(e.key)) {
         e.preventDefault();
-        turnPage(1);
+        turnPage(
+          e.key === "ArrowRight" && paginator.current?.rightToLeft ? -1 : 1,
+        );
       } else if (["ArrowLeft", "PageUp"].includes(e.key)) {
         e.preventDefault();
-        turnPage(-1);
+        turnPage(
+          e.key === "ArrowLeft" && paginator.current?.rightToLeft ? 1 : -1,
+        );
       }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [selectedId, modal, chapter]);
+  const bookmarkOffset = (mark: Mark) => {
+    const doc = frame.current?.contentDocument;
+    return doc && mark.locator
+      ? resolveLocator(documentText(doc), mark.locator)?.start
+      : undefined;
+  };
   const currentBookmark = currentMarks.find(
     (m) =>
       m.kind === "bookmark" &&
+      !m.unresolved &&
+      !!m.locator &&
       pageInfo &&
-      (m.textOffset !== undefined
-        ? paginator.current?.pageForOffset(m.textOffset) === pageInfo.page
+      (bookmarkOffset(m) !== undefined
+        ? paginator.current?.pageForOffset(bookmarkOffset(m)!) === pageInfo.page
         : 1 + Math.round((m.position || 0) * (pageInfo.pages - 1)) ===
           pageInfo.page),
   );
@@ -679,6 +807,13 @@ export function App() {
       kind: "bookmark",
       text: `Page ${pageInfo?.page || 1} · ${engine.chapters[chapter]!.title}`,
       textOffset: pageInfo?.offset,
+      locator: frame.current?.contentDocument
+        ? quoteLocator(
+            documentText(frame.current.contentDocument),
+            engine.chapters[chapter]!.href,
+            pageInfo?.offset || 0,
+          )
+        : undefined,
       page: pageInfo?.page,
       pageCount: pageInfo?.pages,
       readingMode: mode,
@@ -690,6 +825,12 @@ export function App() {
   };
   const highlight = async () => {
     if (!selection || !active || !engine) return;
+    if (selection.end - selection.start > 10000) {
+      setNotice(
+        "Highlight passages of up to 10,000 characters. Select a shorter passage.",
+      );
+      return;
+    }
     await db.marks.add({
       id: crypto.randomUUID(),
       bookId: active.id,
@@ -697,6 +838,14 @@ export function App() {
       chapterTitle: engine.chapters[chapter]!.title,
       kind: "highlight",
       ...selection,
+      locator: frame.current?.contentDocument
+        ? quoteLocator(
+            documentText(frame.current.contentDocument),
+            engine.chapters[chapter]!.href,
+            selection.start,
+            selection.end,
+          )
+        : undefined,
       created: Date.now(),
     });
     frame.current?.contentDocument?.getSelection()?.removeAllRanges();
@@ -710,6 +859,15 @@ export function App() {
     await refresh();
   };
   function selectMark(mark: Mark) {
+    if (
+      mark.unresolved ||
+      (mark.chapter === chapter && orphanIds.includes(mark.id))
+    ) {
+      setNotice(
+        "This saved passage needs review. Its text is preserved, but its location could not be resolved safely.",
+      );
+      return;
+    }
     if (mark.bookId !== selectedId) {
       jump.current = mark.kind === "highlight" ? mark.id : null;
       void db.books
@@ -717,6 +875,7 @@ export function App() {
           chapter: mark.chapter,
           position: mark.position || 0,
           textOffset: mark.textOffset,
+          locator: mark.locator,
           page: mark.page,
         })
         .then(() => {
@@ -727,10 +886,11 @@ export function App() {
       navigate(mark.chapter, mark.kind === "highlight" ? mark.id : undefined);
       if (mark.kind === "bookmark") {
         position.current = mark.position || 0;
-        textOffset.current = mark.textOffset;
+        textOffset.current = bookmarkOffset(mark);
+        resumeLocator.current = mark.locator;
         if (mark.chapter === chapter) {
-          if (mark.textOffset !== undefined)
-            paginator.current?.goToOffset(mark.textOffset);
+          if (bookmarkOffset(mark) !== undefined)
+            paginator.current?.goToOffset(bookmarkOffset(mark)!);
           else
             paginator.current?.goToPage(
               1 +
@@ -769,7 +929,7 @@ export function App() {
     ocrCanceled.current = true;
     ocrJob.current++;
     printAbort.current?.abort();
-    if (worker.current) {
+    if (worker.current && ocrBusyRef.current) {
       void worker.current.terminate();
       worker.current = null;
     }
@@ -794,45 +954,87 @@ export function App() {
         throw Error(
           "This image is too large for local OCR. Use an image below 40 megapixels.",
         );
-      instance = await createWorker("eng", 1, {
-        workerPath: asset("ocr/worker.min.js"),
-        corePath: asset("ocr/core"),
-        langPath: asset("ocr/lang"),
-        workerBlobURL: false,
-        logger: (m) => {
-          if (!ocrCanceled.current && job === ocrJob.current)
-            setOcrProgress(
-              m.status === "recognizing text"
-                ? `Recognizing text… ${Math.round(m.progress * 100)}%`
-                : "Preparing local recognition…",
-            );
-        },
-      });
+      const { createWorker } = await import("tesseract.js");
+      instance =
+        worker.current ||
+        (await createWorker("eng", 1, {
+          workerPath: asset("ocr/worker.min.js"),
+          corePath: asset("ocr/core"),
+          langPath: asset("ocr/lang"),
+          workerBlobURL: false,
+          logger: (m) => {
+            if (!ocrCanceled.current)
+              setOcrProgress(
+                m.status === "recognizing text"
+                  ? `Recognizing text… ${Math.round(m.progress * 100)}%`
+                  : "Preparing local recognition…",
+              );
+          },
+        }));
       if (ocrCanceled.current || job !== ocrJob.current) return;
       worker.current = instance;
       const result = await instance.recognize(blob);
       if (ocrCanceled.current || job !== ocrJob.current) return;
       setOcrText(result.data.text);
       setOcrConfidence(result.data.confidence);
-      await db.ocr.add({
-        id: crypto.randomUUID(),
+      const noteId = `${active.id}:${chapter}:${image.path || image.name}`;
+      await db.ocr.put({
+        id: noteId,
+        imagePath: image.path || image.name,
         bookId: active.id,
         chapter,
         text: result.data.text,
         confidence: result.data.confidence,
         created: Date.now(),
       });
+      setOcrNoteId(noteId);
       setOcrProgress("Recognition complete. Original image unchanged.");
     } catch (e) {
+      if (instance) {
+        await instance.terminate().catch(() => {});
+        instance = undefined;
+        worker.current = null;
+      }
       if (!ocrCanceled.current && job === ocrJob.current) setError(message(e));
     } finally {
-      if (instance) await instance.terminate().catch(() => {});
+      if (instance && (ocrCanceled.current || job !== ocrJob.current))
+        await instance.terminate().catch(() => {});
       if (job === ocrJob.current) {
-        worker.current = null;
         setOcrBusy(false);
       }
     }
   };
+  useEffect(() => {
+    if (modal !== "ocr" || !active) return;
+    let canceled = false;
+    setOcrText("");
+    setOcrConfidence(null);
+    setOcrProgress("");
+    setOcrNoteId(null);
+    const image = rendered?.images[ocrImage];
+    if (image)
+      void db.ocr
+        .where("[bookId+chapter]")
+        .equals([active.id, chapter])
+        .toArray()
+        .then((notes) => {
+          const note = notes.find(
+            (n) => n.imagePath === (image.path || image.name),
+          );
+          if (note && !canceled) {
+            setOcrText(note.text);
+            setOcrConfidence(note.confidence);
+            setOcrNoteId(note.id);
+            setOcrProgress("Previously recognized text, saved on this device.");
+          }
+        })
+        .catch((error) => {
+          if (!canceled) setError(message(error));
+        });
+    return () => {
+      canceled = true;
+    };
+  }, [modal, active?.id, chapter, ocrImage, rendered]);
   const print = async () => {
     if (!engine) return;
     const controller = new AbortController();
@@ -844,7 +1046,9 @@ export function App() {
     try {
       let content = "";
       const indices =
-        printScope === "book" ? engine.chapters.map((_, i) => i) : [chapter];
+        printScope === "book"
+          ? engine.chapters.flatMap((c, i) => (c.linear ? [i] : []))
+          : [chapter];
       if (indices.length > 300)
         throw Error(
           "Print one chapter at a time for books with more than 300 chapters.",
@@ -855,7 +1059,7 @@ export function App() {
         );
         const r = await engine.render(i, controller.signal);
         if (r.warnings.length)
-          throw Error("Cannot print an incomplete chapter: " + r.warnings[0]);
+          throw Error("Review this chapter before printing: " + r.warnings[0]);
         content += `<section class="folio-print-chapter">${r.html}</section>`;
         if (content.length > 16 * 1024 * 1024)
           throw Error(
@@ -966,7 +1170,7 @@ export function App() {
     void fn().catch((e) => setError(message(e)));
   return (
     <div
-      className={`app ${selectedId ? "reading" : ""} ${dark && selectedId ? "night" : ""} ${theme === "sepia" && selectedId ? "sepia" : ""}`}
+      className={`app ${selectedId ? "reading" : ""} ${dark ? "night" : ""} ${theme === "sepia" ? "sepia" : ""}`}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -989,6 +1193,7 @@ export function App() {
       )}
       <input
         ref={input}
+        aria-label="Import EPUB file"
         type="file"
         accept=".epub,application/epub+zip"
         hidden
@@ -996,6 +1201,33 @@ export function App() {
           const f = e.target.files?.[0];
           if (f) void importFile(f);
           e.target.value = "";
+        }}
+      />
+      <input
+        ref={restoreInput}
+        type="file"
+        accept=".folio,.zip,.json"
+        aria-label="Restore library file"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file)
+            void (async () => {
+              setBusy("Restoring your library…");
+              try {
+                const result = await restoreLibrary(file);
+                await refresh();
+                setStorage(await storageStatus());
+                setNotice(
+                  `Restored ${result.books} books. Notes were merged without replacing existing notes.`,
+                );
+              } catch (error) {
+                setError(message(error));
+              } finally {
+                setBusy("");
+              }
+            })();
         }}
       />
       {!selectedId ? (
@@ -1072,59 +1304,63 @@ export function App() {
                 more reading.
               </span>
             </header>
-            <section className="welcome">
-              <div>
-                <span className="eyebrow">MAKE ROOM FOR A GOOD BOOK</span>
-                <h1>
-                  Your next chapter
-                  <br />
-                  starts here<span>.</span>
-                </h1>
-                <p>
-                  A quiet home for your books, ideas, and everything
-                  <br className="desktop-br" /> you want to come back to.
-                </p>
-                <div className="welcome-actions">
-                  <Button
-                    onClick={() => input.current?.click()}
-                    disabled={!!busy}
-                  >
-                    <Icon name="plus" size={18} /> Import a book
-                  </Button>
-                  <Button kind="ghost" onClick={() => setModal("drive")}>
-                    <Icon name="drive" size={18} /> Open from Drive
-                  </Button>
-                </div>
-                <span className="import-hint">
-                  EPUB files · Drag & drop anywhere · Private by default
-                </span>
-              </div>
-              <div className="welcome-art" aria-hidden="true">
-                <div className="art-circle" />
-                <div className="art-book art-back">
-                  <span>
-                    THE ART
+            {!books.length && (
+              <section className="welcome">
+                <div>
+                  <span className="eyebrow">MAKE ROOM FOR A GOOD BOOK</span>
+                  <h1>
+                    Your next chapter
                     <br />
-                    OF NOTICING
+                    starts here<span>.</span>
+                  </h1>
+                  <p>
+                    A quiet home for your books, ideas, and everything
+                    <br className="desktop-br" /> you want to come back to.
+                  </p>
+                  <div className="welcome-actions">
+                    <Button
+                      onClick={() => input.current?.click()}
+                      disabled={!!busy}
+                    >
+                      <Icon name="plus" size={18} /> Import a book
+                    </Button>
+                    <Button kind="ghost" onClick={() => setModal("drive")}>
+                      <Icon name="drive" size={18} /> Open from Drive
+                    </Button>
+                  </div>
+                  <span className="import-hint">
+                    EPUB files · Drag & drop anywhere · Private by default
                   </span>
-                  <i />
                 </div>
-                <div className="art-book art-front">
-                  <span className="art-small">A FIELD GUIDE TO</span>
-                  <span>
-                    the quiet
-                    <br />
-                    <em>in between.</em>
-                  </span>
-                  <div className="art-lines" />
-                  <span className="art-bottom">
-                    FOLIO EDITIONS &nbsp; / &nbsp; 01
+                <div className="welcome-art" aria-hidden="true">
+                  <div className="art-circle" />
+                  <div className="art-book art-back">
+                    <span>
+                      THE ART
+                      <br />
+                      OF NOTICING
+                    </span>
+                    <i />
+                  </div>
+                  <div className="art-book art-front">
+                    <span className="art-small">A FIELD GUIDE TO</span>
+                    <span>
+                      the quiet
+                      <br />
+                      <em>in between.</em>
+                    </span>
+                    <div className="art-lines" />
+                    <span className="art-bottom">
+                      FOLIO EDITIONS &nbsp; / &nbsp; 01
+                    </span>
+                  </div>
+                  <span className="art-star">✳</span>
+                  <span className="art-caption">
+                    A WORLD BETWEEN THE COVERS
                   </span>
                 </div>
-                <span className="art-star">✳</span>
-                <span className="art-caption">A WORLD BETWEEN THE COVERS</span>
-              </div>
-            </section>
+              </section>
+            )}
             <section className="collection">
               <div className="collection-heading">
                 <div>
@@ -1181,8 +1417,8 @@ export function App() {
                           setChapter(book.chapter);
                           setSelectedId(book.id);
                         }}
-                        aria-label={`Read ${book.title}`}
                       >
+                        <span className="sr-only">Read {book.title}</span>
                         <Cover book={book} />
                         <span className="book-open-overlay">
                           <Icon name="book" />
@@ -1204,13 +1440,13 @@ export function App() {
                             setModal("delete");
                           }}
                         >
-                          <Icon name="more" size={18} />
+                          <Icon name="trash" size={18} />
                         </button>
                         <p>{book.author}</p>
                         <div className="book-progress">
                           <span
                             style={{
-                              width: `${Math.round(((book.chapter + (book.page && book.pageCount ? book.page / book.pageCount : 1)) / book.chapterCount) * 100)}%`,
+                              width: `${bookProgress(book)}%`,
                             }}
                           />
                         </div>
@@ -1226,7 +1462,8 @@ export function App() {
                   ))}
                   {!search && (
                     <article className="sample-card">
-                      <div
+                      <button
+                        title="Read The Quiet Atlas sample"
                         className="sample-cover"
                         onClick={() => void openSample()}
                       >
@@ -1239,7 +1476,7 @@ export function App() {
                         <span className="sample-badge">
                           A LITTLE SOMETHING TO START
                         </span>
-                      </div>
+                      </button>
                       <div className="book-meta">
                         <h3>The Quiet Atlas</h3>
                         <p>An original short read by Folio Studio</p>
@@ -1313,7 +1550,15 @@ export function App() {
               )}
             </section>
             <footer className="library-footer">
-              <span>Made for the joy of reading.</span>
+              <button
+                className="text-button"
+                onClick={safe(async () => {
+                  setStorage(await storageStatus());
+                  setModal("storage");
+                })}
+              >
+                <Icon name="download" size={17} /> Storage & backup
+              </button>
               {
                 <button
                   className="text-button"
@@ -1326,11 +1571,14 @@ export function App() {
                             {
                               version: 1,
                               exportedAt: new Date().toISOString(),
-                              books: books.map(({ id, title, author }) => ({
-                                id,
-                                title,
-                                author,
-                              })),
+                              books: books.map(
+                                ({ id, title, author, contentHash }) => ({
+                                  id,
+                                  title,
+                                  author,
+                                  contentHash,
+                                }),
+                              ),
                               annotations: marks,
                               ocr: notes,
                             },
@@ -1379,29 +1627,13 @@ export function App() {
                 className="icon-btn"
                 title="Recognize printed text in chapter images"
                 aria-label="Open OCR"
-                onClick={safe(async () => {
+                onClick={() => {
                   setOcrImage(0);
                   setOcrText("");
                   setOcrConfidence(null);
                   setOcrProgress("");
                   setModal("ocr");
-                  if (active) {
-                    const notes = await db.ocr
-                      .where("[bookId+chapter]")
-                      .equals([active.id, chapter])
-                      .toArray();
-                    const latest = notes.sort(
-                      (a, b) => b.created - a.created,
-                    )[0];
-                    if (latest) {
-                      setOcrText(latest.text);
-                      setOcrConfidence(latest.confidence);
-                      setOcrProgress(
-                        "Previously recognized text, saved on this device.",
-                      );
-                    }
-                  }
-                })}
+                }}
               >
                 <Icon name="scan" />
               </button>
@@ -1424,7 +1656,7 @@ export function App() {
               <span className="tool-separator" />
               <button
                 className="icon-btn font-button"
-                aria-label="Decrease font size"
+                aria-label="A− Decrease font size"
                 onClick={() => setFont((v) => Math.max(14, v - 1))}
               >
                 A−
@@ -1432,7 +1664,7 @@ export function App() {
               <span className="font-value">{font}</span>
               <button
                 className="icon-btn font-button"
-                aria-label="Increase font size"
+                aria-label="A+ Increase font size"
                 onClick={() => setFont((v) => Math.min(36, v + 1))}
               >
                 A+
@@ -1441,7 +1673,9 @@ export function App() {
                 className="icon-btn"
                 aria-label={dark ? "Use light theme" : "Use dark theme"}
                 onClick={() =>
-                  setTheme((t) => (t === "night" ? "paper" : "night"))
+                  setTheme((t) =>
+                    t === "night" ? lastLightTheme.current : "night",
+                  )
                 }
               >
                 <Icon name={dark ? "sun" : "moon"} />
@@ -1469,6 +1703,30 @@ export function App() {
                   {["contents", "bookmarks", "highlights"].map((t) => (
                     <button
                       role="tab"
+                      id={`reader-tab-${t}`}
+                      aria-controls="reader-navigation-panel"
+                      tabIndex={tab === t ? 0 : -1}
+                      onKeyDown={(e) => {
+                        const tabs = ["contents", "bookmarks", "highlights"];
+                        const i = tabs.indexOf(t);
+                        const next =
+                          e.key === "ArrowRight"
+                            ? tabs[(i + 1) % 3]
+                            : e.key === "ArrowLeft"
+                              ? tabs[(i + 2) % 3]
+                              : e.key === "Home"
+                                ? tabs[0]
+                                : e.key === "End"
+                                  ? tabs[2]
+                                  : undefined;
+                        if (next) {
+                          e.preventDefault();
+                          setTab(next);
+                          document
+                            .getElementById(`reader-tab-${next}`)
+                            ?.focus();
+                        }
+                      }}
                       aria-selected={tab === t}
                       key={t}
                       className={tab === t ? "active" : ""}
@@ -1495,7 +1753,13 @@ export function App() {
                     </button>
                   ))}
                 </div>
-                <div className="reader-nav-content">
+                <div
+                  className="reader-nav-content"
+                  id="reader-navigation-panel"
+                  role="tabpanel"
+                  aria-labelledby={`reader-tab-${tab}`}
+                  tabIndex={0}
+                >
                   {tab === "contents" ? (
                     <>
                       <div className="toc-heading">TABLE OF CONTENTS</div>
@@ -1555,6 +1819,11 @@ export function App() {
                               className="note-link"
                               onClick={() => selectMark(m)}
                             >
+                              {(m.unresolved ||
+                                (m.chapter === chapter &&
+                                  orphanIds.includes(m.id))) && (
+                                <small>Location needs review · </small>
+                              )}
                               {m.kind === "highlight"
                                 ? "“" + m.text + "”"
                                 : m.text}
@@ -1612,18 +1881,37 @@ export function App() {
                     className="icon-btn chapter-skip"
                     aria-label="Previous chapter"
                     onClick={() => navigate(chapter - 1)}
-                    disabled={chapter === 0 || chapterLoading}
+                    disabled={
+                      chapter === 0 ||
+                      !engine?.chapters[chapter]?.linear ||
+                      chapterLoading
+                    }
                   >
                     <Icon name="prev" size={15} />
                   </button>
-                  <span>CHAPTER {String(chapter + 1).padStart(2, "0")}</span>
+                  {returnLocation && (
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        const location = returnLocation;
+                        navigate(location.chapter);
+                        textOffset.current = location.offset;
+                        setReturnLocation(null);
+                      }}
+                    >
+                      Back to text
+                    </button>
+                  )}
+                  <span>
+                    {engine?.chapters[chapter]?.title || "Opening chapter"}
+                  </span>
                   <button
                     className="icon-btn chapter-skip"
                     aria-label="Next chapter"
                     onClick={() => navigate(chapter + 1)}
                     disabled={
                       !engine ||
-                      chapter === engine.chapters.length - 1 ||
+                      chapter >= engine.linearCount - 1 ||
                       chapterLoading
                     }
                   >
@@ -1661,7 +1949,7 @@ export function App() {
                 </button>
               </div>
               <div className="paper-wrap">
-                {chapterLoading || busy ? (
+                {chapterLoading ? (
                   <div className="reader-loading">
                     <span className="spinner" />
                     <p>{busy || "Turning the page…"}</p>
@@ -1712,7 +2000,8 @@ export function App() {
                   disabled={
                     !pageInfo ||
                     chapterLoading ||
-                    (chapter === 0 && pageInfo.page === 1)
+                    (pageInfo.page === 1 &&
+                      (chapter === 0 || !engine?.chapters[chapter]?.linear))
                   }
                 >
                   <Icon name="prev" size={16} />
@@ -1725,11 +2014,16 @@ export function App() {
                       : "Counting pages…"}
                   </span>
                   <span className="chapter-location">
-                    Chapter {chapter + 1} of {engine?.chapters.length || "—"}
+                    {engine?.chapters[chapter]?.linear
+                      ? `Chapter ${chapter + 1} of ${engine.linearCount}`
+                      : "Supplementary content"}
                     {chapterCounts.length > 0 &&
-                    chapterCounts.every((n) => n > 0) &&
+                    engine?.chapters[chapter]?.linear &&
+                    chapterCounts
+                      .slice(0, engine?.linearCount)
+                      .every((n) => n > 0) &&
                     pageInfo
-                      ? ` · Book page ${chapterCounts.slice(0, chapter).reduce((a, b) => a + b, 0) + pageInfo.page} of ${chapterCounts.reduce((a, b) => a + b, 0)}`
+                      ? ` · Book page ${chapterCounts.slice(0, chapter).reduce((a, b) => a + b, 0) + pageInfo.page} of ${chapterCounts.slice(0, engine?.linearCount).reduce((a, b) => a + b, 0)}`
                       : ""}
                   </span>
                   <input
@@ -1751,7 +2045,7 @@ export function App() {
                     !engine ||
                     !pageInfo ||
                     chapterLoading ||
-                    (chapter === engine.chapters.length - 1 &&
+                    (chapter >= engine.linearCount - 1 &&
                       pageInfo.page === pageInfo.pages)
                   }
                 >
@@ -1821,7 +2115,7 @@ export function App() {
             <div className="font-slider">
               <button
                 className="icon-btn"
-                aria-label="Smaller text"
+                aria-label="A− Smaller text"
                 onClick={() => setFont((v) => Math.max(14, v - 1))}
               >
                 A−
@@ -1836,7 +2130,7 @@ export function App() {
               />
               <button
                 className="icon-btn"
-                aria-label="Larger text"
+                aria-label="A+ Larger text"
                 onClick={() => setFont((v) => Math.min(36, v + 1))}
               >
                 A+
@@ -1848,6 +2142,7 @@ export function App() {
             <div className="font-options">
               {(
                 [
+                  ["publisher", "Publisher", "Georgia,serif"],
                   ["literary", "Literary", "Georgia,serif"],
                   ["classic", "Classic", "Palatino,serif"],
                   ["modern", "Clean", "Arial,sans-serif"],
@@ -1860,7 +2155,6 @@ export function App() {
                   aria-pressed={fontChoice === id}
                   onClick={() => setFontChoice(id)}
                 >
-                  <span>Aa</span>
                   {label}
                 </button>
               ))}
@@ -1879,7 +2173,6 @@ export function App() {
                   aria-pressed={theme === t}
                   onClick={() => setTheme(t)}
                 >
-                  <span>Aa</span>
                   {t === "paper" ? "Paper" : t === "sepia" ? "Sepia" : "Night"}
                 </button>
               ))}
@@ -1923,7 +2216,7 @@ export function App() {
               onClick={() => {
                 setFont(22);
                 setMode("horizontal");
-                setFontChoice("literary");
+                setFontChoice("publisher");
                 setSpacing(1.7);
                 setMargin("comfortable");
                 setTheme("paper");
@@ -2014,6 +2307,82 @@ export function App() {
               </div>
             </>
           )}
+        </Modal>
+      )}
+      {modal === "storage" && (
+        <Modal title="Storage & backup" onClose={closeModal}>
+          <p>
+            Your books and notes are stored in this browser. A backup includes
+            original EPUBs, reading positions, annotations and OCR notes.
+          </p>
+          <p role="status">
+            {storage?.persistent
+              ? "Storage is protected from automatic eviction."
+              : "Storage is best effort; the browser has not granted persistence."}{" "}
+            {storage
+              ? `${bytes(storage.usage)} used${storage.quota ? ` of ${bytes(storage.quota)}` : ""}.`
+              : ""}
+          </p>
+          <p className="fine-print">
+            Persistence does not protect against clearing browser data,
+            uninstalling the extension or losing this device. Keep a backup
+            somewhere safe. Backups are not encrypted. Restore accepts archives
+            below 2 GB and merges with existing books and notes.
+          </p>
+          <label className="field-label" htmlFor="backup-scope">
+            Books to back up
+          </label>
+          <select
+            id="backup-scope"
+            className="text-input"
+            value={backupScope}
+            onChange={(e) => setBackupScope(e.target.value)}
+          >
+            <option value="">Entire library</option>
+            {books.map((book) => (
+              <option key={book.id} value={book.id}>
+                {book.title}
+              </option>
+            ))}
+          </select>
+          {busy && <p role="status">{busy}</p>}
+          <div className="modal-actions">
+            <Button
+              kind="secondary"
+              disabled={!!busy}
+              onClick={safe(async () => {
+                setStorage(await storageStatus(true));
+              })}
+            >
+              Protect storage
+            </Button>
+            <Button
+              kind="secondary"
+              disabled={!!busy}
+              onClick={() => restoreInput.current?.click()}
+            >
+              Restore / import notes
+            </Button>
+            <Button
+              disabled={!!busy || !books.length}
+              onClick={safe(async () => {
+                setBusy("Backing up your library…");
+                try {
+                  download(
+                    await backupLibrary(backupScope || undefined),
+                    `folio-library-${new Date().toISOString().slice(0, 10)}.folio`,
+                  );
+                  setNotice(
+                    "Backup created. Keep the downloaded file somewhere safe.",
+                  );
+                } finally {
+                  setBusy("");
+                }
+              })}
+            >
+              Back up library
+            </Button>
+          </div>
         </Modal>
       )}
       {modal === "delete" && (
@@ -2151,6 +2520,18 @@ export function App() {
                 are not supported in this version.
               </p>
               <div className="modal-actions">
+                {ocrNoteId && (
+                  <Button
+                    kind="secondary"
+                    disabled={ocrBusy}
+                    onClick={safe(async () => {
+                      await db.ocr.update(ocrNoteId, { text: ocrText });
+                      setOcrProgress("Your edits were saved on this device.");
+                    })}
+                  >
+                    Save edits
+                  </Button>
+                )}
                 {ocrText && (
                   <Button
                     kind="secondary"
@@ -2189,5 +2570,21 @@ export function App() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function bookProgress(book: Book) {
+  if (!book.page || !book.pageCount || book.chapter >= book.chapterCount)
+    return 0;
+  const counts = book.pagination?.counts.slice(0, book.chapterCount);
+  if (counts?.length === book.chapterCount && counts.every((n) => n > 0)) {
+    const before = counts.slice(0, book.chapter).reduce((a, b) => a + b, 0);
+    return Math.round(
+      (100 * (before + (book.page - 1))) / counts.reduce((a, b) => a + b, 0),
+    );
+  }
+  return Math.round(
+    (100 * (book.chapter + (book.page - 1) / book.pageCount)) /
+      book.chapterCount,
   );
 }

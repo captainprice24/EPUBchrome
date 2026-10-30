@@ -1,6 +1,6 @@
 # Privacy and local data
 
-Folio v0.2 stores imported EPUB copies, reading positions, bookmarks, highlights and OCR records in IndexedDB in the current browser profile. Original files are not rewritten. OCR records and annotations are separate from the book bytes.
+Folio v0.3 stores imported EPUB copies, reading positions, bookmarks, highlights and OCR records in IndexedDB in the current browser profile. Original files are not rewritten. OCR records and annotations are separate from the book bytes.
 
 ## Network activity
 
@@ -15,14 +15,15 @@ Folio v0.2 stores imported EPUB copies, reading positions, bookmarks, highlights
 | Permission | Purpose |
 | --- | --- |
 | `storage` | Extension storage permission declared for the app; the current library itself uses IndexedDB |
+| `unlimitedStorage` | Reduce automatic storage eviction risk for the extension library; not a backup |
 | `identity` | Optional Google sign-in through Chrome’s identity API |
 | `https://www.googleapis.com/*` | Drive metadata and file downloads when import is requested |
 
-These permissions are declared in the manifest even when the optional OAuth client has not been configured. The app does not request broad access to all websites or write access to Drive.
+The identity and Google host permissions are included only in builds configured with an OAuth client. In those configured builds they are declared at installation, rather than requested dynamically. The app does not request broad access to all websites or write access to Drive.
 
 ## Storage is not a backup
 
-Browser data removal, profile changes, extension identity changes, uninstalling or storage eviction can remove the local library. Keep original EPUBs. Use **Export notes** to keep a JSON record of annotations and OCR results; it does not contain the books or provide an automatic restore flow.
+Browser data removal, profile changes, extension identity changes, uninstalling or storage eviction can remove the local library. Keep original EPUBs. Use **Storage & backup** to download a restorable `.folio` archive with originals, positions, annotations and OCR. **Export notes** provides JSON without the originals, importable for matching books. Backups are unencrypted and must be protected by their owner. Persistent storage is requested, and the extension declares `unlimitedStorage`, but neither protects against uninstalling, deliberate clearing or losing the device.
 
 Deleting a book in Folio removes its local book record and associated bookmarks, highlights and OCR records. It does not delete the original local file or the Drive source.
 

@@ -12,6 +12,26 @@ await rm("public/ocr/core", { recursive: true, force: true });
 await mkdir("public/ocr/core", { recursive: true });
 await mkdir("public/ocr/licenses", { recursive: true });
 await mkdir("public/ocr/lang", { recursive: true });
+await mkdir("public/licenses", { recursive: true });
+for (const name of [
+  "react",
+  "react-dom",
+  "scheduler",
+  "dexie",
+  "@zip.js/zip.js",
+  "dompurify",
+  "css-tree",
+  "mdn-data",
+  "@noble/hashes",
+])
+  await copyFile(
+    `node_modules/${name}/LICENSE`,
+    `public/licenses/${name.replaceAll("/", "-")}.txt`,
+  );
+await copyFile(
+  "THIRD_PARTY_NOTICES.md",
+  "public/licenses/THIRD_PARTY_NOTICES.md",
+);
 await copyFile(
   "node_modules/tesseract.js/dist/worker.min.js",
   "public/ocr/worker.min.js",

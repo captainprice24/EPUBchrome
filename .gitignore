@@ -3,6 +3,7 @@ node_modules/
 .wxt/
 .env
 public/ocr/
+public/licenses/
 public/demo.epub
 test-results/
 playwright-report/

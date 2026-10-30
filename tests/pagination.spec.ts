@@ -6,7 +6,7 @@ async function openLong(page: Page) {
   await page.setViewportSize({ width: 1200, height: 820 });
   await page.goto("/reader.html");
   await page
-    .locator("input[type=file]")
+    .getByLabel("Import EPUB file")
     .setInputFiles(path.resolve("test-results/fixtures/long.epub"));
   await expect(page.locator(".page-count")).toHaveText(/^Page 1 of \d+/);
   await expect

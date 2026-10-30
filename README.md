@@ -6,7 +6,7 @@
 
 A local-first Chrome extension for reading EPUBs, saving the passages that matter, and taking your reading to paper.
 
-![Version 0.2.0](https://img.shields.io/badge/version-0.2.0-385546)
+![Version 0.3.0](https://img.shields.io/badge/version-0.3.0-385546)
 ![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest_V3-70865b)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 [![Build and test](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml)
@@ -38,13 +38,14 @@ Turn pages horizontally or read vertically, see the page count in each chapter, 
 
 ## Features
 
-| Feature | Available in v0.2 |
+| Feature | Available in v0.3 |
 | --- | --- |
 | Local EPUB library | File picker, drag and drop, title/author search, sorting and removal |
-| Chapter navigation | EPUB 3 contents, EPUB 2 NCX, spine order and publisher page lists when supplied |
+| Chapter navigation | EPUB 3 contents, nested EPUB 2 NCX, spine order and publisher page lists when supplied |
 | Pages and reading tools | Per-chapter page counts, horizontal or vertical reading, a page slider, text-based resume and chapter search |
 | Reading preferences | Text size, three typefaces, paper/sepia/night themes, line spacing and margins |
-| Bookmarks and highlights | Persistent annotations, navigation and JSON note export |
+| Bookmarks and highlights | Verified text-quote anchors, navigation and JSON notes export/import |
+| Backup and restore | Original books, positions, annotations and OCR in a local `.folio` archive |
 | On-device OCR | Printed English in chapter images; bundled worker, WASM and model; text download |
 | PDF printing | Current chapter or whole book through Chrome’s **Save as PDF** dialog |
 | Google Drive | File-link import after configuring a Google OAuth client; live-account validation pending |
@@ -84,7 +85,7 @@ The app itself does not require a server, a Google account or an OCR subscriptio
 npm run package
 ```
 
-This creates `.output/folio-0.2.0-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
+This creates `.output/folio-0.3.0-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
 
 ### Develop and test
 
@@ -124,3 +125,7 @@ See the [privacy guide](docs/PRIVACY.md) for storage, permissions and data-loss 
 | [Third-party notices](THIRD_PARTY_NOTICES.md) | Dependency attribution and OCR model provenance |
 
 Built with **TypeScript, React, WXT, zip.js, Dexie and Tesseract.js**. Rust/WASM modules and a Python OCR backend are research options; neither is required by the app. A project source-code license has not been selected; third-party components retain their own licenses.
+
+## Audit and reliability work
+
+The [independent v0.2 audit](docs/AUDIT.md) and [v0.3 response](docs/AUDIT_RESPONSE.md) record verified defects, fixes, deferred work and recommendations we did not adopt. Version 0.3 corrects XHTML and linked/imported styles, supports supplementary content links and RTL page movement, verifies saved passages, adds backup/restore and improves UI legibility. Three pinned IDPF/W3C samples and axe checks supplement the existing reader tests. This is not a conformance or accessibility certification.

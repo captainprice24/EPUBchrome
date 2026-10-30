@@ -7,10 +7,12 @@ import {
   type Entry,
 } from "@zip.js/zip.js";
 import DOMPurify from "dompurify";
+import { rewriteCss } from "./publisher-css";
 configure({ useWebWorkers: false });
 export interface Chapter {
   href: string;
   title: string;
+  linear: boolean;
 }
 export interface Nav {
   href: string;
@@ -19,7 +21,7 @@ export interface Nav {
 }
 export interface Rendered {
   html: string;
-  images: { src: string; name: string }[];
+  images: { src: string; name: string; path?: string }[];
   warnings: string[];
 }
 const MAX_ENTRY = 64 * 1024 * 1024;
@@ -60,6 +62,9 @@ export class Epub {
   pages: Nav[] = [];
   coverPath?: string;
   fixedLayout = false;
+  language = "";
+  progression: "ltr" | "rtl" = "ltr";
+  linearCount = 0;
   constructor(blob: Blob) {
     if (blob.size > 1024 ** 3)
       throw Error("This version supports EPUB files up to 1 GB.");
@@ -104,6 +109,12 @@ export class Epub {
         e.getAttribute("property") === "rendition:layout" &&
         e.textContent === "pre-paginated",
     );
+    this.language = elements(opf, "language")[0]?.textContent?.trim() || "";
+    this.progression =
+      elements(opf, "spine")[0]?.getAttribute("page-progression-direction") ===
+      "rtl"
+        ? "rtl"
+        : "ltr";
     const items = elements(opf, "item");
     const manifest = new Map(items.map((e) => [e.getAttribute("id"), e]));
     this.chapters = elements(opf, "itemref")
@@ -114,10 +125,28 @@ export class Epub {
         return {
           href: resolvePath(opfPath, item.getAttribute("href") || ""),
           title: `Chapter ${i + 1}`,
+          linear: true,
         };
       });
-    if (!this.chapters.length)
-      throw Error("This EPUB has no readable chapters.");
+    this.linearCount = this.chapters.length;
+    // Keep legacy linear indices stable. Supplementary content is link-addressable,
+    // but never inserted into sequential reading or whole-book page counts.
+    for (const item of items) {
+      if (
+        !["application/xhtml+xml", "text/html"].includes(
+          item.getAttribute("media-type") || "",
+        )
+      )
+        continue;
+      const href = resolvePath(opfPath, item.getAttribute("href") || "");
+      if (!this.chapters.some((c) => c.href === href))
+        this.chapters.push({
+          href,
+          title: "Supplementary content",
+          linear: false,
+        });
+    }
+    if (!this.linearCount) throw Error("This EPUB has no readable chapters.");
     const coverId = elements(opf, "meta")
       .find((e) => e.getAttribute("name") === "cover")
       ?.getAttribute("content");
@@ -185,7 +214,16 @@ export class Epub {
                   resolvePath(p, src) +
                   (src.includes("#") ? "#" + src.split("#")[1] : ""),
                 title: elements(point, "text")[0]?.textContent || "Chapter",
-                depth: 0,
+                depth: (() => {
+                  let depth = 0;
+                  for (
+                    let parent = point.parentElement;
+                    parent;
+                    parent = parent.parentElement
+                  )
+                    if (parent.localName === "navPoint") depth++;
+                  return depth;
+                })(),
               });
             } catch {
               /* external navigation */
@@ -199,7 +237,9 @@ export class Epub {
       if (nav) ch.title = nav.title;
     }
     if (!this.toc.length)
-      this.toc = this.chapters.map((c) => ({ ...c, depth: 0 }));
+      this.toc = this.chapters
+        .filter((c) => c.linear)
+        .map((c) => ({ ...c, depth: 0 }));
     return this;
   }
   private entry(path: string) {
@@ -247,7 +287,7 @@ export class Epub {
     this.urls.set(path, url);
     return url;
   }
-  private async css(
+  private async legacyCss(
     css: string,
     base: string,
     warnings?: string[],
@@ -275,7 +315,8 @@ export class Epub {
     }
     return css;
   }
-  async render(index: number, signal?: AbortSignal): Promise<Rendered> {
+  // Frozen v0.2 output, used only to capture locators before the renderer upgrade.
+  async renderLegacy(index: number, signal?: AbortSignal): Promise<Rendered> {
     signal?.throwIfAborted();
     const warnings: string[] = [];
     const chapter = this.chapters[index];
@@ -302,7 +343,7 @@ export class Epub {
     });
     const doc = new DOMParser().parseFromString(clean, "text/html");
     for (const style of Array.from(doc.querySelectorAll("style")))
-      style.textContent = await this.css(
+      style.textContent = await this.legacyCss(
         style.textContent || "",
         chapter.href,
         warnings,
@@ -313,7 +354,7 @@ export class Epub {
         try {
           const p = resolvePath(chapter.href, link.getAttribute("href")!);
           const s = doc.createElement("style");
-          s.textContent = await this.css(
+          s.textContent = await this.legacyCss(
             await this.text(p),
             p,
             warnings,
@@ -329,7 +370,7 @@ export class Epub {
     for (const element of Array.from(doc.querySelectorAll("[style]")))
       element.setAttribute(
         "style",
-        await this.css(
+        await this.legacyCss(
           element.getAttribute("style") || "",
           chapter.href,
           warnings,
@@ -389,6 +430,195 @@ export class Epub {
         : "") + doc.body.innerHTML;
     signal?.throwIfAborted();
     return { html: content, images, warnings };
+  }
+  async render(index: number, signal?: AbortSignal): Promise<Rendered> {
+    signal?.throwIfAborted();
+    const chapter = this.chapters[index];
+    if (!chapter) throw Error("Chapter not found.");
+    const warnings: string[] = [];
+    const source = await this.text(chapter.href);
+    let parsed = new DOMParser().parseFromString(
+      source,
+      "application/xhtml+xml",
+    );
+    if (parsed.querySelector("parsererror")) {
+      parsed = new DOMParser().parseFromString(source, "text/html");
+      warnings.push(
+        "This chapter contains invalid XHTML; HTML recovery was used.",
+      );
+    }
+    // Collect head styles before sanitization. DOMPurify deliberately drops link.
+    const sheets: { text?: string; href?: string; media?: string }[] = [];
+    for (const node of Array.from(parsed.querySelectorAll("style,link"))) {
+      if (node.localName === "style")
+        sheets.push({
+          text: node.textContent || "",
+          media: node.getAttribute("media") || undefined,
+        });
+      else if (
+        node.getAttribute("rel")?.split(/\s+/).includes("stylesheet") &&
+        !node.getAttribute("rel")?.split(/\s+/).includes("alternate")
+      )
+        sheets.push({
+          href: node.getAttribute("href") || "",
+          media: node.getAttribute("media") || undefined,
+        });
+      node.remove();
+    }
+    for (const element of [
+      parsed.documentElement,
+      ...Array.from(parsed.querySelectorAll("*")),
+    ]) {
+      const language = element.getAttribute("xml:lang");
+      if (language && !element.hasAttribute("lang"))
+        element.setAttribute("lang", language);
+    }
+    const clean = DOMPurify.sanitize(parsed.documentElement, {
+      WHOLE_DOCUMENT: true,
+      RETURN_DOM: true,
+      FORBID_TAGS: [
+        "script",
+        "iframe",
+        "frame",
+        "object",
+        "embed",
+        "form",
+        "input",
+        "button",
+        "audio",
+        "video",
+        "base",
+        "meta",
+        "link",
+      ],
+      FORBID_ATTR: ["srcset", "formaction", "autofocus"],
+    });
+    // DOM input is cloned, not reparsed through the HTML tokenizer. Self-closing
+    // XHTML elements have already been resolved into the correct tree.
+    if (!(clean instanceof Element))
+      throw Error("The chapter could not be sanitized safely.");
+    const html =
+      clean.localName === "html" ? clean : clean.querySelector("html");
+    const body = html?.querySelector("body") || clean;
+    for (const element of [clean, ...Array.from(clean.querySelectorAll("*"))]) {
+      for (const attr of Array.from(element.attributes))
+        if (
+          attr.name.startsWith("data-folio") ||
+          (attr.name === "id" && attr.value.startsWith("folio-"))
+        )
+          element.removeAttribute(attr.name);
+    }
+    const cssBudget = { sheets: 0, bytes: 0, seen: new Set<string>() };
+    const cssText = async (text: string, base: string) =>
+      rewriteCss(
+        text,
+        base,
+        resolvePath,
+        (path) => this.text(path),
+        (path) => this.resource(path, signal),
+        warnings,
+        cssBudget,
+      );
+    const styles: string[] = [];
+    for (const sheet of sheets) {
+      try {
+        const base = sheet.href
+          ? resolvePath(chapter.href, sheet.href)
+          : chapter.href;
+        let text = await cssText(
+          sheet.href ? await this.text(base) : sheet.text || "",
+          base,
+        );
+        if (sheet.media)
+          text = `@media ${sheet.media.replace(/[{}<>]/g, "")}{${text}}`;
+        // Scoped CSS cannot target the paginator's viewport, track or content.
+        styles.push(
+          `<style>@scope ([data-folio-html=${CSS.escape(chapter.href)}]) {${text.replaceAll("<", "\\3c ")}}</style>`,
+        );
+      } catch {
+        warnings.push("Some publisher styles could not be loaded safely.");
+      }
+    }
+    for (const element of Array.from(body.querySelectorAll("[style]"))) {
+      // Parse declarations in a rule so the same safe URL rewriting applies.
+      try {
+        cssBudget.sheets--;
+        const text = await cssText(
+          `x{${element.getAttribute("style") || ""}}`,
+          chapter.href,
+        );
+        element.setAttribute(
+          "style",
+          text.slice(text.indexOf("{") + 1, text.lastIndexOf("}")),
+        );
+      } catch {
+        element.removeAttribute("style");
+      }
+    }
+    const images: Rendered["images"] = [];
+    for (const img of Array.from(body.querySelectorAll("img,image"))) {
+      const ref =
+        img.getAttribute("src") ||
+        img.getAttribute("href") ||
+        img.getAttribute("xlink:href");
+      if (!ref) continue;
+      try {
+        const path = resolvePath(chapter.href, ref);
+        const src = await this.resource(path, signal);
+        if (img.localName === "image") {
+          img.setAttribute("href", src);
+          img.removeAttribute("xlink:href");
+        } else {
+          img.setAttribute("src", src);
+          img.setAttribute("loading", "lazy");
+        }
+        images.push({ src, name: path.split("/").pop() || "Page image", path });
+      } catch {
+        warnings.push("An image could not be loaded safely.");
+        for (const name of ["src", "href", "xlink:href"])
+          img.removeAttribute(name);
+        img.setAttribute("alt", "Image unavailable");
+      }
+    }
+    for (const a of Array.from(body.querySelectorAll("a"))) {
+      const ref = a.getAttribute("href") || a.getAttribute("xlink:href");
+      a.removeAttribute("target");
+      a.removeAttribute("xlink:href");
+      if (!ref) continue;
+      try {
+        a.setAttribute(
+          "data-book-href",
+          resolvePath(chapter.href, ref) +
+            (ref.includes("#") ? "#" + ref.split("#").slice(1).join("#") : ""),
+        );
+        a.setAttribute("href", "#");
+      } catch {
+        a.removeAttribute("href");
+      }
+    }
+    const owner = document.implementation.createHTMLDocument();
+    const outer = owner.createElement("div"),
+      inner = owner.createElement("div");
+    const copyAttributes = (from: Element | null, to: HTMLElement) => {
+      for (const attr of Array.from(from?.attributes || [])) {
+        if (["class", "id", "lang", "dir", "title"].includes(attr.name))
+          to.setAttribute(attr.name, attr.value);
+      }
+      const language = from?.getAttribute("xml:lang");
+      if (language && !to.lang) to.lang = language;
+    };
+    copyAttributes(html, outer);
+    copyAttributes(body, inner);
+    outer.dataset.folioHtml = chapter.href;
+    inner.dataset.folioBody = "";
+    outer.lang ||= this.language;
+    if (!outer.dir) outer.dir = this.progression;
+    // Serialize as HTML so empty non-void elements retain explicit end tags.
+    for (const child of Array.from(body.childNodes))
+      inner.append(owner.importNode(child, true));
+    outer.append(inner);
+    signal?.throwIfAborted();
+    return { html: styles.join("") + outer.outerHTML, images, warnings };
   }
   chapterSize(index: number) {
     const chapter = this.chapters[index];

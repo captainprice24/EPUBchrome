@@ -1,4 +1,4 @@
-# Version 0.2 validation
+# Version 0.3 validation
 
 The production UI is exercised in Chromium using a local test server, with the same script/worker WASM CSP as the extension manifest. The environment administrator blocks unpacked extension loading, so toolbar startup, extension-origin permissions and real Google OAuth require a separate Chrome smoke test.
 
@@ -14,7 +14,7 @@ Automated coverage:
 
 `npm run typecheck`, `npm run build`, and `npm test` are the required checks. The application dependency audit reported no known advisories during development. This does not certify the code's security or all possible documents.
 
-Not covered: a live Google account, extension-origin runtime, Windows/macOS Chrome, EPUB conformance corpus, actual 1 GB performance, handwriting/multilingual accuracy, print color/font fidelity, PDF/A/PDF/UA, or DRM-protected files. The 1 GB input limit is a safety ceiling, not a performance claim.
+Not covered: a live Google account, extension-origin runtime, Windows/macOS Chrome, exhaustive EPUB conformance, actual 1 GB performance, handwriting/multilingual accuracy, print color/font fidelity, PDF/A/PDF/UA, or DRM-protected files. The 1 GB input limit is a safety ceiling, not a performance claim.
 
 ## Reproducibility check
 
@@ -30,4 +30,12 @@ A separate three-test browser suite exercises the production web build at `/EPUB
 
 Four additional browser scenarios use an 80-paragraph EPUB chapter. They verify multi-page horizontal layout and counts, page turns without chapter jumps, exact page restoration after reopening, background chapter counts and book totals, reflow with a preserved passage, persistent font/theme/direction settings, multiple page bookmarks in one chapter, keyboard crossing of chapter boundaries, swipe turns, resize-driven repagination and narrow-screen layout. The original annotation/OCR/print tests remain in place and use the new page viewport where relevant.
 
-The full suite now contains 11 reader tests and 3 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Native fixed-layout books and arbitrary publisher CSS still need broader conformance testing.
+The full suite now contains 21 reader tests and 3 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
+
+## Audit regressions
+
+Seven new audit scenarios cover XHTML self-closing markup, linked/imported/scoped CSS, supplementary-document links and return navigation, logical RTL pagination/resume, legacy highlight migration and unresolved notes, SHA-256 duplicate detection, full backup/restore with repeat-restore and corrupt-checksum rejection, JSON notes re-import, Sepia memory and keyboard tabs. Axe checks library, reader chrome, reading settings and night library for serious/critical violations; book content inside the scriptless iframe is excluded from that app-chrome scan. This does not replace manual accessibility testing.
+
+Three additional scenarios compile unmodified, pinned IDPF/W3C samples and verify imported-font rendering, Japanese content/Unicode identifiers and Arabic direction/pagination. See [corpus sources and licenses](../tests/corpus/README.md). A fresh `npm test` needs GitHub access to prepare the corpus; no upstream build scripts are executed. The existing OCR scenario now saves corrections, reopens them and checks results are not shown for another image.
+
+The [audit response](AUDIT_RESPONSE.md) distinguishes completed changes from deferred and modified recommendations. A small regression corpus is not an EPUB certification, and successful local tests do not establish a successful remote deployment.

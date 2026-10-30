@@ -1,6 +1,6 @@
 {
   "name": "epubchrome",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,10 +14,13 @@
     "format": "prettier --write src entrypoints tests scripts/*.mjs *.ts *.json",
     "build:pages": "npm run build && python3 scripts/package.py && vite build --config vite.web.config.ts --mode pages && node scripts/pages-assets.mjs",
     "test:pages": "playwright test --config playwright.pages.config.ts",
-    "preview:pages": "node scripts/serve.mjs --pages"
+    "preview:pages": "node scripts/serve.mjs --pages",
+    "format:check": "prettier --check src entrypoints tests scripts/*.mjs *.ts *.json"
   },
   "dependencies": {
+    "@noble/hashes": "2.4.0",
     "@zip.js/zip.js": "2.24.0",
+    "css-tree": "3.2.1",
     "dexie": "4.4.7",
     "dompurify": "3.4.17",
     "react": "19.3.1",
@@ -25,8 +28,10 @@
     "tesseract.js": "7.0.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.64.1",
     "@types/chrome": "0.3.7",
+    "@types/css-tree": "3.2.0",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
