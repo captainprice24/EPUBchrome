@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1 — Books first and usable fullscreen tools
+
+- Separated Books and Documents with automatic defaults for existing files, independent category counts and persistent manual moves included in backups.
+- Restored fullscreen access to adding bookmarks, selecting/highlighting text and navigating contents, bookmarks and highlights.
+- Fixed long-title overflow and remove-button collisions; improved banner and selection-toolbar contrast and narrow-screen category navigation.
+- Cleared reader loading state when returning to the library before a document finishes opening, keeping imports usable.
+- Clarified the app, extension metadata and documentation as an EPUB-first book library with additional document support.
+
 ## 0.4.0 — More formats and fullscreen
 
 - Added PDF reading with PDF.js: original page counts, local range access, embedded text selection/highlights, outlines/internal links, zoom and byte-for-byte original downloads.

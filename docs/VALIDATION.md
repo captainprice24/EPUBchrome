@@ -30,7 +30,7 @@ A separate three-test browser suite exercises the production web build at `/EPUB
 
 Four additional browser scenarios use an 80-paragraph EPUB chapter. They verify multi-page horizontal layout and counts, page turns without chapter jumps, exact page restoration after reopening, background chapter counts and book totals, reflow with a preserved passage, persistent font/theme/direction settings, multiple page bookmarks in one chapter, keyboard crossing of chapter boundaries, swipe turns, resize-driven repagination and narrow-screen layout. The original annotation/OCR/print tests remain in place and use the new page viewport where relevant.
 
-The full suite now contains 30 reader tests and 5 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
+The full suite now contains 33 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
 
 ## Audit regressions
 
@@ -47,3 +47,7 @@ Eight new reader scenarios cover Markdown headings/tables/code and script/remote
 Two new Pages tests check PDF/DjVu workers and WASM and MOBI/Markdown/fullscreen behavior under `/EPUBchrome/`. The MOBI6 tests include images, body attributes, missing closing tags and declared DRM rejection. KF8/hybrid support uses the library's separate parser but still needs a broader real-document corpus. Password-protected PDFs, unusual fonts/rotations, indirect DjVu, accessibility of every imported document and gigabyte-scale performance are not certified.
 
 Concurrent restore is also exercised in two tabs: identical originals merge and every annotation retains a valid book reference. Restore actions within a tab are queued through UI completion, with content-hash deduplication rechecked inside the database write transaction. Corpus navigation assertions wait for the requested source document rather than accepting the previous chapter’s page status.
+
+## Library and fullscreen UI regressions (v0.4.1)
+
+Three additional reader scenarios verify fullscreen bookmark/highlight creation and navigation on desktop and a 390px fallback view, including paragraph-boundary selections, accessibility checks and saved notes after reopening. Category coverage verifies older EPUB records without format metadata, default document categorization, manual moves without losing bookmarks, reload persistence and bounded long titles. A deliberately delayed PDF worker verifies that leaving an unfinished open does not lock library imports. The mixed-format backup test now also restores a manual category override. An additional Pages test verifies book-first copy, separate shelves, banner contrast and long-title layout at desktop/mobile widths.

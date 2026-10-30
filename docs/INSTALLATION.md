@@ -54,7 +54,7 @@ Review every result for errors. Model confidence is an engine estimate, not a ca
 npm run package
 ```
 
-The generated `.output/folio-0.4.0-chrome.zip` contains the production extension and local OCR assets. Extract it before using **Load unpacked**. The source ZIP from GitHub must be built first.
+The generated `.output/folio-0.4.1-chrome.zip` contains the production extension and local OCR assets. Extract it before using **Load unpacked**. The source ZIP from GitHub must be built first.
 
 After updating source, run `npm ci` and `npm run build`, then click **Reload** for Folio in `chrome://extensions`. Keep the extension ID and Chrome profile stable to preserve the same local storage and OAuth configuration.
 

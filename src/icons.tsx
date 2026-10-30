@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 const paths: Record<string, string[]> = {
+  document: ["M14 2H5v20h14V7z", "M14 2v5h5M8 12h8M8 16h8"],
   expand: ["M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"],
   contract: ["M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5"],
   book: [

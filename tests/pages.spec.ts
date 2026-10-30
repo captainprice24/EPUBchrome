@@ -179,3 +179,58 @@ test("Pages MOBI worker, Markdown navigation and fullscreen fallback use package
     doc.getByRole("heading", { name: "Field notes", exact: true }),
   ).toBeVisible();
 });
+
+test("Pages library categories, banner contrast and long document titles work on desktop and mobile", async ({
+  page,
+}) => {
+  await page.goto("/EPUBchrome/");
+  await expect(page.locator(".welcome")).toContainText(
+    "Your private book library, built around EPUB",
+  );
+  await page.getByLabel("Import document file").setInputFiles({
+    name: "reference.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(
+      "# doc017852202610300959501234567890123456789012345678901234567890\n\nYour private reference notes.",
+    ),
+  });
+  await expect(page.locator(".page-count")).toContainText("Page 1 of");
+  await page.getByRole("button", { name: "Back to library" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your documents" }),
+  ).toBeVisible();
+  await expect(page.locator(".sample-card")).toHaveCount(0);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(
+      page.getByRole("button", { name: "Books", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Documents", exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    const banner = page.locator(".web-preview-banner");
+    expect(await banner.evaluate((el) => getComputedStyle(el).color)).toBe(
+      "rgb(242, 244, 230)",
+    );
+    const title = await page.locator(".book-title").boundingBox(),
+      remove = await page.locator(".book-meta > .icon-btn").boundingBox();
+    expect(title!.x + title!.width).toBeLessThanOrEqual(remove!.x);
+    await page.screenshot({
+      path: `test-results/pages-documents-${width}.png`,
+      fullPage: true,
+    });
+  }
+  await page
+    .getByRole("button", { name: "Move to Books", exact: true })
+    .click();
+  await expect(page.locator(".book-card")).toHaveCount(0);
+  await page.getByRole("button", { name: "Books", exact: true }).click();
+  await expect(page.locator(".book-card")).toHaveCount(1);
+  await page.reload();
+  await expect(page.locator(".book-card")).toHaveCount(1);
+});

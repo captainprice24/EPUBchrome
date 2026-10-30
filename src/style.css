@@ -486,6 +486,7 @@ a {
   z-index: 1;
 }
 .cover strong {
+  overflow-wrap: anywhere;
   font:
     normal 30px/1.13 Georgia,
     serif;
@@ -498,6 +499,11 @@ a {
   -webkit-box-orient: vertical;
 }
 .cover-author {
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   font-size: 12px;
   letter-spacing: 1px;
   margin-top: 12px;
@@ -565,6 +571,12 @@ a {
   position: relative;
 }
 .book-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  width: calc(100% - 34px);
   font:
     normal 17px Georgia,
     serif;
@@ -582,15 +594,17 @@ a {
   margin: 0 0 7px;
 }
 .book-meta p {
+  overflow-wrap: anywhere;
   font-size: 12px;
   color: var(--text-secondary);
   margin: 7px 0 12px;
   line-height: 1.5;
 }
 .book-meta > .icon-btn {
+  margin: 0;
   position: absolute;
   top: 10px;
-  right: -7px;
+  right: 0;
 }
 .book-progress {
   height: 2px;
@@ -604,6 +618,8 @@ a {
   background: #8ba379;
 }
 .book-detail {
+  flex-wrap: wrap;
+  gap: 6px;
   display: flex;
   justify-content: space-between;
   font-size: 12px;
@@ -1269,6 +1285,7 @@ a {
   line-height: 1.9;
 }
 .selection-bar {
+  z-index: 3;
   position: absolute;
   bottom: 20px;
   left: 50%;
@@ -1277,7 +1294,7 @@ a {
   align-items: center;
   gap: 15px;
   background: #2d4f3b;
-  color: var(--text-secondary);
+  color: #f2f4e6;
   padding: 10px 13px;
   border-radius: 7px;
   box-shadow: 0 5px 25px #1d342b30;
@@ -1305,7 +1322,7 @@ a {
   font-size: 12px;
 }
 .selection-bar .icon-btn {
-  color: var(--text-secondary);
+  color: inherit;
   width: 23px;
   height: 23px;
 }
@@ -1548,6 +1565,7 @@ a {
     padding: 20px 17px;
   }
   .cover strong {
+    overflow-wrap: anywhere;
     font-size: 27px;
   }
   .library-footer {
@@ -1654,7 +1672,7 @@ a {
   justify-content: space-between;
   gap: 20px;
   background: #294c3c;
-  color: var(--text-secondary);
+  color: #f2f4e6;
   font-size: 12px;
   line-height: 1.65;
   padding: 12px 26px;
@@ -1668,12 +1686,12 @@ a {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: var(--text-secondary);
+  color: inherit;
   white-space: nowrap;
   text-underline-offset: 3px;
 }
 .app:has(.web-preview-banner) .library-sidebar {
-  top: 41px;
+  top: var(--preview-banner-height, 44px);
 }
 .app.reading:has(.web-preview-banner) .reader-layout {
   height: calc(100vh - 115px);
@@ -2152,7 +2170,6 @@ a {
 }
 .app.immersive > .reader-top,
 .app.immersive > .web-preview-banner,
-.app.immersive .reader-sidebar,
 .app.immersive .chapter-toolbar {
   display: none;
 }
@@ -2173,7 +2190,7 @@ a {
   align-items: center;
   gap: 7px;
 }
-.immersive-controls > span {
+.immersive-controls > .immersive-label {
   font-size: 12px;
   color: var(--text-secondary);
 }
@@ -2210,7 +2227,7 @@ a {
   .app.native-reading .reader-book-title {
     max-width: 120px;
   }
-  .immersive-controls > span {
+  .immersive-controls > .immersive-label {
     display: none;
   }
   .app .immersive-controls {
@@ -2233,5 +2250,122 @@ a {
   .app.native-reading .reader-brand,
   .app.native-reading .reader-top-divider {
     display: none;
+  }
+}
+
+/* Library categories and fullscreen tools remain usable at narrow widths. */
+.collection-move {
+  margin-top: 12px;
+  font-size: 12px;
+  max-width: 100%;
+}
+.immersive-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.app.immersive .reader-sidebar {
+  max-width: min(290px, 88vw);
+}
+.app .web-preview-banner > span {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .app .web-preview-banner {
+    flex-wrap: wrap;
+    gap: 6px 16px;
+  }
+  .app .library-sidebar {
+    position: sticky;
+    top: 0 !important;
+    width: 100%;
+    padding: 10px 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .app .library-sidebar > .brand {
+    display: none;
+  }
+  .app .library-sidebar nav {
+    margin: 0;
+    flex-direction: row;
+    gap: 4px;
+  }
+  .app .library-sidebar nav button {
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 5px;
+    padding: 8px 2px;
+    font-size: 11px;
+  }
+  .app .library-main {
+    margin-left: 0;
+    padding-inline: 18px;
+  }
+  .app .immersive-tools {
+    flex: 1 1 auto;
+    gap: 6px 12px;
+  }
+  .app .immersive-controls {
+    padding-block: 8px;
+  }
+  .app .immersive-controls > button:last-child {
+    margin-left: auto;
+  }
+}
+@media (max-width: 420px) {
+  .app .books-grid {
+    gap: 24px 14px;
+  }
+  .app .cover {
+    padding: 16px 12px;
+  }
+  .app .cover strong {
+    font-size: 24px;
+  }
+  .app .collection-controls {
+    flex-wrap: wrap;
+  }
+  .app .search {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+}
+
+@media (min-width: 761px) {
+  .app .web-preview-banner {
+    position: sticky;
+    top: 0;
+  }
+}
+
+/* Keep text covers bounded, with room for author and imprint. */
+.cover-kicker,
+.cover-author,
+.cover-bottom {
+  flex-shrink: 0;
+}
+.cover strong {
+  flex: 1;
+  min-height: 0;
+  margin-top: 16px;
+}
+.cover-author {
+  margin-top: 10px;
+}
+.cover-bottom {
+  margin-top: 12px;
+}
+@media (max-width: 760px) {
+  .app .toast {
+    top: auto;
+    bottom: 12px;
+    right: 12px;
+    max-width: calc(100vw - 24px);
+  }
+  .app.reading .toast {
+    bottom: 110px;
   }
 }

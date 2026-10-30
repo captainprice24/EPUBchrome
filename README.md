@@ -4,9 +4,9 @@
 
 **Your books. Your notes. Your reading room.**
 
-A private Chrome reader for **EPUB, PDF, DjVu, MOBI and Markdown**, with fullscreen reading, bookmarks, highlights and offline OCR.
+A private, **EPUB-first book library** for Chrome. Read EPUB and MOBI books, keep **PDF, DjVu and Markdown** in a separate Documents collection, and use fullscreen reading, bookmarks, highlights and local OCR throughout.
 
-![Version 0.4.0](https://img.shields.io/badge/version-0.4.0-385546)
+![Version 0.4.1](https://img.shields.io/badge/version-0.4.1-385546)
 ![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest_V3-70865b)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 [![Build and test](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml)
@@ -15,7 +15,7 @@ A private Chrome reader for **EPUB, PDF, DjVu, MOBI and Markdown**, with fullscr
 
 </div>
 
-![Folio library with EPUB import and an included sample book](docs/images/library.png)
+![Folio Books collection with a separate Documents category](docs/images/library.png)
 
 ## Read at your own pace
 
@@ -36,14 +36,18 @@ Turn pages horizontally or read vertically, see the page count in each chapter, 
 
 </details>
 
+Books and Documents have separate shelves, counts, search and sorting. Existing items are categorized automatically without changing their original files or notes. Use **Move to Books** or **Move to Documents** on a card to organize items yourself; category choices are included in backups.
+
+In fullscreen, use **Bookmark** to save the current page, select text and choose **Highlight**, or open **Notes** to revisit bookmarks and highlights. **Contents**, **Settings** and **Exit fullscreen** remain available.
+
 ## Features
 
 | Feature | Available in v0.4 |
 | --- | --- |
-| Local document library | File picker, drag and drop, title/author search, sorting and removal |
+| Book library and Documents | Separate shelves and counts, manual category moves, file picker, drag and drop, search, sorting and removal |
 | Chapter navigation | EPUB 3 contents, nested EPUB 2 NCX, spine order and publisher page lists when supplied |
 | Pages and reading tools | Per-chapter layout counts for reflowing books; original page counts for PDF/DjVu, page slider, saved place and text search |
-| Fullscreen | Toolbar button or **F**, distraction-free fallback, **Esc**/visible exit, preserved passage |
+| Fullscreen | Toolbar button or **F**; Contents, Bookmark, Notes and Settings stay available; **Esc**/visible exit; preserved passage |
 | Reading preferences | Reflowable text size, Publisher/three reader typefaces, themes, spacing and margins; zoom for original PDF/DjVu pages |
 | Bookmarks and highlights | Verified text-quote anchors, navigation and JSON notes export/import |
 | Backup and restore | Original books, positions, annotations and OCR in a local `.folio` archive |
@@ -87,7 +91,7 @@ The app itself does not require a server, a Google account or an OCR subscriptio
 npm run package
 ```
 
-This creates `.output/folio-0.4.0-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
+This creates `.output/folio-0.4.1-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
 
 ### Develop and test
 
@@ -138,6 +142,8 @@ Markdown and MOBI use the reflowing reader, including chapters, typography, high
 
 [Format support and limits](docs/FORMATS.md) explains encrypted files, Markdown images, MOBI variants, DjVu text layers, backup compatibility and what has actually been tested.
 
+![A separate Documents collection alongside your books](docs/images/documents-library.png)
+
 ![Original PDF pages with local text selection, zoom and page navigation](docs/images/pdf-reader.png)
 
-![Fullscreen reading with settings, page position and an explicit exit](docs/images/fullscreen-reader.png)
+![Fullscreen reading with bookmark, saved highlights, contents, settings and exit controls](docs/images/fullscreen-reader.png)

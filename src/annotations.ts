@@ -9,8 +9,17 @@ export function selectionOffsets(doc: Document) {
     start = -1,
     end = -1;
   for (const n of list) {
-    if (n === range.startContainer) start = cursor + range.startOffset;
-    if (n === range.endContainer) end = cursor + range.endOffset;
+    // Select-all and touch selection can put range boundaries on elements,
+    // rather than text nodes. Intersect accepted text nodes so both use the
+    // same offsets as saved quote locators, without counting scripts/styles.
+    if (range.intersectsNode(n)) {
+      const from = n === range.startContainer ? range.startOffset : 0;
+      const to = n === range.endContainer ? range.endOffset : n.length;
+      if (to > from) {
+        if (start < 0) start = cursor + from;
+        end = cursor + to;
+      }
+    }
     cursor += n.length;
   }
   if (start < 0 || end < 0 || end <= start) return null;

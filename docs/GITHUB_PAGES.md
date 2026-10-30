@@ -6,7 +6,7 @@ The repository builds a standalone web edition of the same React reader. It is i
 
 ## Automatic deployment
 
-The `Build and test` workflow runs on pushes to `main`, pull requests and manual dispatch. It builds and tests the extension, builds the web preview, and runs five Pages-specific tests under `/EPUBchrome/`. Successful `main` runs upload a Pages artifact and deploy it through the `github-pages` environment. Pull requests are tested but not published.
+The `Build and test` workflow runs on pushes to `main`, pull requests and manual dispatch. It builds and tests the extension, builds the web preview, and runs six Pages-specific tests under `/EPUBchrome/`. Successful `main` runs upload a Pages artifact and deploy it through the `github-pages` environment. Pull requests are tested but not published.
 
 The workflow attempts to enable Pages with `actions/configure-pages` and set the build source to GitHub Actions. If the workflow token cannot change that repository setting, it reports a warning and continues deployment. A repository owner should select **Settings → Pages → Source → GitHub Actions** once. This prevents a separate branch/Jekyll build from replacing the tested reader with the repository README. If GitHub does not permit automatic enablement for the workflow token:
 

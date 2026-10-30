@@ -1,7 +1,9 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { TextLocator } from "./locators";
 import type { DocumentFormat } from "./document-types";
+export type LibraryCollection = "books" | "documents";
 export interface Book {
+  collection?: LibraryCollection;
   format?: DocumentFormat;
   fileName?: string;
   prepared?: Blob;
@@ -25,6 +27,18 @@ export interface Book {
   locator?: TextLocator;
   rendererVersion?: number;
   contentHash?: string;
+}
+export function bookCollection(
+  book: Pick<Book, "collection" | "format">,
+): LibraryCollection {
+  return (
+    book.collection ??
+    (book.format === undefined ||
+    book.format === "epub" ||
+    book.format === "mobi"
+      ? "books"
+      : "documents")
+  );
 }
 export interface Mark {
   id: string;

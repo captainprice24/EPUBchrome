@@ -7,7 +7,13 @@ import {
   TextWriter,
   configure,
 } from "@zip.js/zip.js";
-import { db, type Book, type Mark, type OCRNote } from "./store";
+import {
+  db,
+  type Book,
+  type Mark,
+  type OCRNote,
+  type LibraryCollection,
+} from "./store";
 import { contentHash } from "./content-hash";
 import { storageStatus } from "./storage";
 import type { TextLocator } from "./locators";
@@ -285,6 +291,9 @@ export async function restoreLibrary(file: File) {
       if (item.contentHash !== hash)
         throw Error(`Book checksum does not match: ${title}`);
       const metadata = {
+        ...(item.collection === "books" || item.collection === "documents"
+          ? { collection: item.collection as LibraryCollection }
+          : {}),
         added: number(item.added),
         lastRead: number(item.lastRead),
         chapter: number(item.chapter, 30000),

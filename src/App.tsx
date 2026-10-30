@@ -15,6 +15,8 @@ import {
   download,
   message,
   removeBook,
+  bookCollection,
+  type LibraryCollection,
   type Book,
   type Mark,
 } from "./store";
@@ -131,7 +133,7 @@ function Cover({
   book,
   large = false,
 }: {
-  book: Pick<Book, "title" | "author" | "cover">;
+  book: Pick<Book, "title" | "author" | "cover" | "format" | "collection">;
   large?: boolean;
 }) {
   const [url, setUrl] = useState("");
@@ -154,7 +156,11 @@ function Cover({
         <img src={url} alt="" />
       ) : (
         <>
-          <span className="cover-kicker">A FOLIO EDITION</span>
+          <span className="cover-kicker">
+            {bookCollection(book) === "documents"
+              ? `${formatNames[book.format || "pdf"]} DOCUMENT`
+              : "A FOLIO EDITION"}
+          </span>
           <div className="cover-orbit" />
           <strong>{book.title}</strong>
           <span className="cover-author">{book.author}</span>
@@ -223,7 +229,13 @@ export function App() {
   const [books, setBooks] = useState<Book[]>([]),
     [marks, setMarks] = useState<Mark[]>([]),
     [selectedId, setSelectedId] = useState<string | null>(null),
-    [filter, setFilter] = useState("all"),
+    [filter, setFilter] = useState<
+      LibraryCollection | "bookmarks" | "highlights"
+    >(() =>
+      localStorage.getItem("folio-collection") === "documents"
+        ? "documents"
+        : "books",
+    ),
     [search, setSearch] = useState(""),
     [sort, setSort] = useState("recent");
   const [busy, setBusy] = useState(""),
@@ -295,6 +307,33 @@ export function App() {
   const [ocrNoteId, setOcrNoteId] = useState<string | null>(null);
   const [pageZoom, setPageZoom] = useState(1);
   const fullscreen = useReaderFullscreen(!!selectedId);
+  const previewBanner = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const banner = previewBanner.current,
+      root = fullscreen.ref.current;
+    if (!banner || !root) return;
+    const measure = () =>
+      root.style.setProperty(
+        "--preview-banner-height",
+        `${banner.getBoundingClientRect().height}px`,
+      );
+    const observer = new ResizeObserver(measure);
+    measure();
+    observer.observe(banner);
+    return () => observer.disconnect();
+  }, [webPreview]);
+  const [immersiveSidebar, setImmersiveSidebar] = useState(false);
+  const navigationOpen = fullscreen.enabled ? immersiveSidebar : sidebar;
+  const setNavigationOpen = fullscreen.enabled
+    ? setImmersiveSidebar
+    : setSidebar;
+  useEffect(() => {
+    if (!fullscreen.enabled) setImmersiveSidebar(false);
+  }, [fullscreen.enabled]);
+  useEffect(() => {
+    if (fullscreen.enabled && immersiveSidebar)
+      document.getElementById(`reader-tab-${tab}`)?.focus();
+  }, [fullscreen.enabled, immersiveSidebar, tab]);
   const fixedPages = !!engine?.fixedPages;
   const paper = useRef<HTMLDivElement>(null);
   const dark = theme === "night";
@@ -361,6 +400,10 @@ export function App() {
     void refresh().catch((e) => setError(message(e)));
   }, [refresh]);
   useEffect(() => {
+    if (filter === "books" || filter === "documents")
+      localStorage.setItem("folio-collection", filter);
+  }, [filter]);
+  useEffect(() => {
     localStorage.setItem("folio-font", String(font));
     if (theme !== "night") {
       lastLightTheme.current = theme;
@@ -424,6 +467,7 @@ export function App() {
       }
       if (existing) {
         await refresh();
+        setFilter(bookCollection(existing));
         setChapter(existing.chapter);
         setSelectedId(existing.id);
         setNotice(
@@ -476,7 +520,7 @@ export function App() {
       await refresh();
       setChapter(stored.chapter);
       setSelectedId(stored.id);
-      setFilter("all");
+      setFilter(bookCollection(stored));
       setNotice(
         stored.id === book.id
           ? "Added to your private library."
@@ -512,11 +556,14 @@ export function App() {
     if (!selectedId) {
       setEngine(null);
       setRendered(null);
+      setPageInfo(null);
+      setBusy((current) => (current === "Opening your book…" ? "" : current));
       return;
     }
     let canceled = false;
     let parser: DocumentEngine | undefined;
     setBusy("Opening your book…");
+    setPageInfo(null);
     setRendered(null);
     void (async () => {
       let book = await db.books.get(selectedId);
@@ -630,6 +677,7 @@ export function App() {
   function navigate(index: number, anchor?: string, last = false) {
     if (!engine) return;
     const next = Math.max(0, Math.min(index, engine.chapters.length - 1));
+    if (window.innerWidth <= 760) setNavigationOpen(false);
     setSelection(null);
     position.current = 0;
     textOffset.current = undefined;
@@ -770,6 +818,10 @@ export function App() {
       .catch((e) => setError(message(e)));
     doc.addEventListener("mouseup", () => setSelection(selectionOffsets(doc)));
     doc.addEventListener("keyup", () => setSelection(selectionOffsets(doc)));
+    doc.addEventListener("selectionchange", () => {
+      const selected = selectionOffsets(doc);
+      if (selected) setSelection(selected);
+    });
     doc.addEventListener("keydown", (event) => {
       if (event.key === "Escape") fullscreen.exit();
       if (
@@ -1302,7 +1354,9 @@ export function App() {
     }
     setNotice("No match in this chapter.");
   }
-  const visibleBooks = books
+  const collectionView = filter === "books" || filter === "documents";
+  const collectionBooks = books.filter((b) => bookCollection(b) === filter);
+  const visibleBooks = collectionBooks
     .filter((b) =>
       (b.title + " " + b.author).toLowerCase().includes(search.toLowerCase()),
     )
@@ -1334,11 +1388,11 @@ export function App() {
       }}
     >
       {webPreview && (
-        <div className="web-preview-banner">
+        <div className="web-preview-banner" ref={previewBanner}>
           <span>
-            <strong>Folio web preview</strong> · Try local books, highlights,
-            OCR and PDF printing. Books stay in this browser; the extension has
-            a separate library.
+            <strong>Folio web preview</strong> · Your private EPUB book library,
+            with PDF and other documents too. Files stay in this browser; the
+            extension has a separate library.
           </span>
           <a href={asset("folio-chrome.zip")} download>
             <Icon name="download" size={15} />
@@ -1393,7 +1447,7 @@ export function App() {
               className="brand"
               onClick={(e) => {
                 e.preventDefault();
-                setFilter("all");
+                setFilter("books");
               }}
             >
               <span className="brand-icon">
@@ -1404,11 +1458,29 @@ export function App() {
             <p className="sidebar-caption">YOUR READING ROOM</p>
             <nav aria-label="Library">
               <button
-                className={filter === "all" ? "active" : ""}
-                onClick={() => setFilter("all")}
+                aria-current={filter === "books" ? "page" : undefined}
+                className={filter === "books" ? "active" : ""}
+                onClick={() => setFilter("books")}
               >
                 <Icon name="grid" />
-                All books<span>{books.length}</span>
+                Books
+                <span aria-hidden="true">
+                  {books.filter((b) => bookCollection(b) === "books").length}
+                </span>
+              </button>
+              <button
+                aria-current={filter === "documents" ? "page" : undefined}
+                className={filter === "documents" ? "active" : ""}
+                onClick={() => setFilter("documents")}
+              >
+                <Icon name="document" />
+                Documents
+                <span aria-hidden="true">
+                  {
+                    books.filter((b) => bookCollection(b) === "documents")
+                      .length
+                  }
+                </span>
               </button>
               <button
                 className={filter === "bookmarks" ? "active" : ""}
@@ -1435,7 +1507,7 @@ export function App() {
               </div>
               <strong>A library that’s yours.</strong>
               <p>
-                Your books and notes stay
+                Your books, documents and notes stay
                 <br />
                 in this browser.
               </p>
@@ -1448,18 +1520,20 @@ export function App() {
             <header className="library-top">
               <span className="breadcrumb">
                 Your library <span>/</span>{" "}
-                {filter === "all"
-                  ? "All books"
-                  : filter === "bookmarks"
-                    ? "Bookmarks"
-                    : "Highlights"}
+                {filter === "books"
+                  ? "Books"
+                  : filter === "documents"
+                    ? "Documents"
+                    : filter === "bookmarks"
+                      ? "Bookmarks"
+                      : "Highlights"}
               </span>
               <span className="top-label">
                 <Icon name="leaf" size={15} /> A little less scrolling. A little
                 more reading.
               </span>
             </header>
-            {!books.length && (
+            {filter === "books" && !collectionBooks.length && !search && (
               <section className="welcome">
                 <div>
                   <span className="eyebrow">MAKE ROOM FOR A GOOD BOOK</span>
@@ -1469,8 +1543,9 @@ export function App() {
                     starts here<span>.</span>
                   </h1>
                   <p>
-                    A quiet home for your books, ideas, and everything
-                    <br className="desktop-br" /> you want to come back to.
+                    Your private book library, built around EPUB.
+                    <br className="desktop-br" /> Read MOBI books too, with PDF,
+                    DjVu and Markdown in a separate Documents collection.
                   </p>
                   <div className="welcome-actions">
                     <Button
@@ -1484,7 +1559,8 @@ export function App() {
                     </Button>
                   </div>
                   <span className="import-hint">
-                    EPUB · PDF · DjVu · MOBI · Markdown · Private by default
+                    Books first · EPUB & MOBI · Documents welcome · Private by
+                    default
                   </span>
                 </div>
                 <div className="welcome-art" aria-hidden="true">
@@ -1520,19 +1596,25 @@ export function App() {
               <div className="collection-heading">
                 <div>
                   <h2>
-                    {filter === "all"
+                    {filter === "books"
                       ? "Your bookshelf"
-                      : filter === "bookmarks"
-                        ? "Your bookmarks"
-                        : "Your highlights"}{" "}
+                      : filter === "documents"
+                        ? "Your documents"
+                        : filter === "bookmarks"
+                          ? "Your bookmarks"
+                          : "Your highlights"}{" "}
                     <span>
-                      {filter === "all" ? books.length : visibleMarks.length}
+                      {collectionView
+                        ? collectionBooks.length
+                        : visibleMarks.length}
                     </span>
                   </h2>
                   <p>
-                    {filter === "all"
-                      ? "Good stories. New perspectives. All in one place."
-                      : "The passages and places worth keeping."}
+                    {filter === "books"
+                      ? "An EPUB-first home for your books. Your next chapter belongs here."
+                      : filter === "documents"
+                        ? "PDF, DjVu and Markdown, with the same private reading tools."
+                        : "The passages and places worth keeping."}
                   </p>
                 </div>
                 <div className="collection-controls">
@@ -1541,17 +1623,21 @@ export function App() {
                     <input
                       aria-label="Search library"
                       placeholder={
-                        filter === "all"
+                        filter === "books"
                           ? "Search your books…"
-                          : "Search your notes…"
+                          : filter === "documents"
+                            ? "Search your documents…"
+                            : "Search your notes…"
                       }
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                     />
                   </label>
-                  {filter === "all" && (
+                  {collectionView && (
                     <select
-                      aria-label="Sort books"
+                      aria-label={
+                        filter === "books" ? "Sort books" : "Sort documents"
+                      }
                       value={sort}
                       onChange={(e) => setSort(e.target.value)}
                     >
@@ -1562,7 +1648,7 @@ export function App() {
                   )}
                 </div>
               </div>
-              {filter === "all" ? (
+              {collectionView ? (
                 <div className="books-grid">
                   {visibleBooks.map((book) => (
                     <article className="book-card" key={book.id}>
@@ -1583,7 +1669,11 @@ export function App() {
                       <div className="book-meta">
                         <button
                           className="book-title"
-                          onClick={() => setSelectedId(book.id)}
+                          title={book.title}
+                          onClick={() => {
+                            setChapter(book.chapter);
+                            setSelectedId(book.id);
+                          }}
                         >
                           {book.title}
                         </button>
@@ -1618,10 +1708,37 @@ export function App() {
                           )}
                           <span>{bytes(book.size)}</span>
                         </span>
+                        <button
+                          className="text-button collection-move"
+                          onClick={safe(async () => {
+                            const collection =
+                              bookCollection(book) === "books"
+                                ? "documents"
+                                : "books";
+                            await db.books.update(book.id, { collection });
+                            await refresh();
+                            setNotice(
+                              `Moved “${book.title}” to ${collection === "books" ? "Books" : "Documents"}.`,
+                            );
+                          })}
+                        >
+                          <Icon
+                            name={
+                              bookCollection(book) === "books"
+                                ? "document"
+                                : "book"
+                            }
+                            size={14}
+                          />
+                          Move to{" "}
+                          {bookCollection(book) === "books"
+                            ? "Documents"
+                            : "Books"}
+                        </button>
                       </div>
                     </article>
                   ))}
-                  {!search && (
+                  {filter === "books" && !search && (
                     <article className="sample-card">
                       <button
                         title="Read The Quiet Atlas sample"
@@ -1654,7 +1771,9 @@ export function App() {
                   {!visibleBooks.length && search && (
                     <div className="empty">
                       <Icon name="search" size={30} />
-                      <h3>No books found</h3>
+                      <h3>
+                        No {filter === "books" ? "books" : "documents"} found
+                      </h3>
                       <p>Try another title or author.</p>
                     </div>
                   )}
@@ -1667,8 +1786,16 @@ export function App() {
                       <Icon name="plus" size={26} />
                     </span>
                     <strong>Room for one more.</strong>
-                    <p>Bring your next read along.</p>
-                    <small>Choose a document file</small>
+                    <p>
+                      {filter === "books"
+                        ? "Bring your next book along."
+                        : "Keep your reference reading here."}
+                    </p>
+                    <small>
+                      {filter === "books"
+                        ? "Import a book"
+                        : "Import a document"}
+                    </small>
                   </button>
                 </div>
               ) : (
@@ -1757,7 +1884,7 @@ export function App() {
                   Export notes
                 </button>
               }
-              <span>Offline reading · Your documents, your space</span>
+              <span>Your books first. Your documents alongside.</span>
             </footer>
           </main>
         </>
@@ -1875,14 +2002,59 @@ export function App() {
           </header>
           {fullscreen.enabled && (
             <div className="immersive-controls">
-              <button
-                className="text-button"
-                aria-label="Reading settings"
-                onClick={() => setModal("reading")}
+              <div
+                className="immersive-tools"
+                role="group"
+                aria-label="Fullscreen reading tools"
               >
-                <Icon name="settings" size={17} /> Settings
-              </button>
-              <span>
+                <button
+                  className="text-button"
+                  aria-label="Contents"
+                  title="Show chapter navigation"
+                  aria-expanded={navigationOpen}
+                  aria-controls={
+                    navigationOpen ? "reader-navigation" : undefined
+                  }
+                  onClick={() => {
+                    setTab("contents");
+                    setNavigationOpen(!navigationOpen || tab !== "contents");
+                  }}
+                >
+                  <Icon name="list" size={17} /> Contents
+                </button>
+                <button
+                  className={`bookmark-action ${currentBookmark ? "saved" : ""}`}
+                  aria-label={currentBookmark ? "Bookmarked" : "Bookmark"}
+                  aria-pressed={!!currentBookmark}
+                  onClick={safe(addBookmark)}
+                  disabled={!engine || !pageInfo || chapterLoading}
+                >
+                  <Icon name="bookmark" size={17} />
+                  {currentBookmark ? "Bookmarked" : "Bookmark"}
+                </button>
+                <button
+                  className="text-button"
+                  aria-label="Notes — bookmarks and highlights"
+                  aria-expanded={navigationOpen && tab !== "contents"}
+                  aria-controls={
+                    navigationOpen ? "reader-navigation" : undefined
+                  }
+                  onClick={() => {
+                    setTab("highlights");
+                    setNavigationOpen(!navigationOpen || tab === "contents");
+                  }}
+                >
+                  <Icon name="highlight" size={17} /> Notes
+                </button>
+                <button
+                  className="text-button"
+                  aria-label="Reading settings"
+                  onClick={() => setModal("reading")}
+                >
+                  <Icon name="settings" size={17} /> Settings
+                </button>
+              </div>
+              <span className="immersive-label">
                 {fullscreen.fallback
                   ? "Distraction-free view"
                   : "Fullscreen reading"}
@@ -1900,14 +2072,30 @@ export function App() {
             </div>
           )}
           <div className="reader-layout">
-            {sidebar && (
-              <aside className="reader-sidebar">
+            {navigationOpen && (
+              <aside
+                className="reader-sidebar"
+                id="reader-navigation"
+                aria-label="Reading navigation"
+              >
                 <header>
-                  <span>IN THIS BOOK</span>
+                  <span>
+                    {active && bookCollection(active) === "documents"
+                      ? "IN THIS DOCUMENT"
+                      : "IN THIS BOOK"}
+                  </span>
                   <button
                     className="icon-btn"
                     aria-label="Hide navigation"
-                    onClick={() => setSidebar(false)}
+                    onClick={() => {
+                      setNavigationOpen(false);
+                      if (fullscreen.enabled)
+                        fullscreen.ref.current
+                          ?.querySelector<HTMLButtonElement>(
+                            '.immersive-controls [aria-controls="reader-navigation"]',
+                          )
+                          ?.focus();
+                    }}
                   >
                     <Icon name="list" size={18} />
                   </button>
@@ -2093,11 +2281,11 @@ export function App() {
             <main className="reader-main">
               <div className="chapter-toolbar">
                 <div>
-                  {!sidebar && (
+                  {!navigationOpen && (
                     <button
                       className="icon-btn"
                       aria-label="Show navigation"
-                      onClick={() => setSidebar(true)}
+                      onClick={() => setNavigationOpen(true)}
                     >
                       <Icon name="list" />
                     </button>
@@ -2500,8 +2688,9 @@ export function App() {
           {webPreview ? (
             <>
               <p>
-                This web preview opens EPUBs from your computer. Google Drive
-                sign-in uses the Chrome extension and needs its OAuth setup.
+                This web preview opens books and documents from your computer.
+                Google Drive sign-in uses the Chrome extension and needs its
+                OAuth setup.
               </p>
               <a
                 className="button secondary"

@@ -20,9 +20,13 @@ All reading happens locally. Imported originals are stored unchanged, fingerprin
 
 Fixed pages retain their original fonts and colours. Reading themes change the surrounding UI. Horizontal mode fits the page; vertical mode fits its width and allows scrolling within it. Page controls and boundary scrolling move between original pages; a continuous strip of all pages is not provided.
 
+## Books and Documents
+
+Folio is an EPUB-first book library. EPUB and MOBI appear under **Books** by default, while PDF, DjVu and Markdown appear under **Documents**. Existing libraries are categorized without rewriting original files or notes. Each category has its own shelf and count, with search and sorting within the selected category. Use **Move to Books** or **Move to Documents** on a card when the default does not fit; your choice survives reloads and library backup/restore. Saved bookmarks and highlights remain accessible across both categories.
+
 ## Fullscreen
 
-Use the toolbar button or **F**. **Esc** and **Exit fullscreen** leave the mode. Settings, page controls and fixed-page zoom remain available. Browsers without the Fullscreen API use distraction-free reading within the current tab; they cannot hide browser/OS chrome. Entering/exiting fullscreen preserves the saved text passage instead of replacing it with the start of a newly laid-out page.
+Use the toolbar button or **F**. **Esc** and **Exit fullscreen** leave the mode. Contents, **Bookmark**, **Notes**, Settings, page controls and fixed-page zoom remain available. Select text and choose **Highlight** to save a passage; **Notes** opens the saved-bookmark and highlight tabs without leaving fullscreen. Browsers without the Fullscreen API use distraction-free reading within the current tab; they cannot hide browser/OS chrome. Entering/exiting fullscreen preserves the saved text passage instead of replacing it with the start of a newly laid-out page.
 
 ## Backups and originals
 

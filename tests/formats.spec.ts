@@ -240,6 +240,14 @@ test("mixed-format backups preserve originals and can restore every reader", asy
     await page.getByRole("button", { name: "Bookmark", exact: true }).click();
     await page.getByRole("button", { name: "Back to library" }).click();
   }
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
+  await expect(page.locator(".book-card")).toHaveCount(3);
+  await page
+    .locator(".book-card")
+    .filter({ hasText: "Field notes" })
+    .getByRole("button", { name: "Move to Books", exact: true })
+    .click();
+  await expect(page.locator(".book-card")).toHaveCount(2);
   await page.getByRole("button", { name: "Storage & backup" }).click();
   const event = page.waitForEvent("download");
   await page
@@ -263,23 +271,31 @@ test("mixed-format backups preserve originals and can restore every reader", asy
     manifest.books.map((b: { format: string }) => b.format).sort(),
   ).toEqual(["djvu", "md", "mobi", "pdf"]);
   expect(manifest.books.every((b: object) => !("prepared" in b))).toBe(true);
+  expect(
+    manifest.books.find((b: { format: string }) => b.format === "md")
+      .collection,
+  ).toBe("books");
   await page.getByRole("button", { name: "Close dialog" }).click();
-  for (let i = 0; i < 4; i++) {
-    await page
-      .locator(".book-card")
-      .first()
-      .getByRole("button", { name: /^Remove / })
-      .click();
-    await page
-      .getByRole("button", { name: "Remove book", exact: true })
-      .click();
+  for (const category of ["Documents", "Books"]) {
+    await page.getByRole("button", { name: category, exact: true }).click();
+    for (let i = 0; i < 2; i++) {
+      await page
+        .locator(".book-card")
+        .first()
+        .getByRole("button", { name: /^Remove / })
+        .click();
+      await page
+        .getByRole("button", { name: "Remove book", exact: true })
+        .click();
+      await expect(page.locator(".book-card")).toHaveCount(1 - i);
+    }
   }
   await page.getByLabel("Restore library file").setInputFiles({
     name: "library.folio",
     mimeType: "application/zip",
     buffer,
   });
-  await expect(page.locator(".book-card")).toHaveCount(4);
+  await expect(page.locator(".book-card")).toHaveCount(2);
   for (const title of [
     "Field notes",
     "The Local Reading Guide",
@@ -287,7 +303,16 @@ test("mixed-format backups preserve originals and can restore every reader", asy
     "reading",
   ]) {
     await page
-      .getByRole("button", { name: `Read ${title} `, exact: false })
+      .getByRole("button", {
+        name:
+          title === "Field notes" || title === "The Local Reading Guide"
+            ? "Books"
+            : "Documents",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("button", { name: `Read ${title}`, exact: false })
       .click();
     await expect(page.locator(".page-count")).toContainText("Page 1 of");
     await expect(
@@ -371,4 +396,213 @@ test("large DjVu takes the Blob-range decoder path and still renders original pa
   });
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(page.locator(".book-card")).toHaveCount(1);
+});
+
+for (const fallback of [false, true]) {
+  test(`fullscreen annotations can be created and revisited in ${fallback ? "a narrow fallback view" : "native fullscreen"}`, async ({
+    page,
+  }) => {
+    if (fallback) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.addInitScript(() =>
+        Object.defineProperty(document, "fullscreenEnabled", {
+          get: () => false,
+        }),
+      );
+    }
+    await open(page, path.resolve("public/demo.epub"));
+    await page
+      .getByRole("button", { name: "Enter fullscreen", exact: true })
+      .click();
+    await expect(page.locator(".app")).toHaveClass(/immersive/);
+    if (!fallback)
+      await expect
+        .poll(() => page.evaluate(() => !!document.fullscreenElement))
+        .toBe(true);
+    await expect(page.locator(".reader-sidebar")).toHaveCount(0);
+    await page.getByRole("button", { name: "Bookmark", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Bookmarked", exact: true }),
+    ).toBeVisible();
+    // Touch/selection-handle changes can fire selectionchange without mouseup.
+    await book(page)
+      .locator("p")
+      .nth(1)
+      .evaluate((el) => {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        document.getSelection()?.removeAllRanges();
+        document.getSelection()?.addRange(r);
+        document.dispatchEvent(new Event("selectionchange"));
+      });
+    await page.getByRole("button", { name: "Highlight", exact: true }).click();
+    await expect(book(page).locator("mark[data-folio]").first()).toBeVisible();
+    await page
+      .getByRole("button", { name: "Notes — bookmarks and highlights" })
+      .click();
+    await expect(
+      page.getByRole("tab", { name: "Highlights", exact: true }),
+    ).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".reader-note")).toHaveCount(1);
+    await page.getByRole("tab", { name: "Saved", exact: true }).click();
+    await expect(page.locator(".reader-note")).toHaveCount(1);
+    await page.locator(".reader-note .note-link").click();
+    if (!fallback)
+      await page.getByRole("button", { name: "Hide navigation" }).click();
+    await page.getByRole("button", { name: "Contents", exact: true }).click();
+    await expect(
+      page.getByRole("tab", { name: "Contents", exact: true }),
+    ).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("button", { name: "Hide navigation" }).click();
+    await page
+      .getByRole("button", { name: "Notes — bookmarks and highlights" })
+      .click();
+    await page.locator(".reader-note .note-link").click();
+    if (!fallback)
+      await page.getByRole("button", { name: "Hide navigation" }).click();
+    await expect(book(page).locator("mark[data-folio]").first()).toBeVisible();
+    const result = await new AxeBuilder({ page }).exclude("iframe").analyze();
+    expect(
+      result.violations
+        .filter((v) => ["serious", "critical"].includes(v.impact || ""))
+        .map((v) => ({ id: v.id, targets: v.nodes.map((n) => n.target) })),
+    ).toEqual([]);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page
+      .getByRole("button", { name: "Exit fullscreen", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Back to library" }).click();
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Read The Quiet Atlas", exact: false })
+      .click();
+    await expect(book(page).locator("mark[data-folio]").first()).toHaveCount(1);
+    await expect(
+      page.getByRole("button", { name: "Bookmarked", exact: true }),
+    ).toBeVisible();
+  });
+}
+
+test("Books and Documents categorize existing files, preserve manual moves and keep long titles inside cards", async ({
+  page,
+}) => {
+  await open(page, path.resolve("public/demo.epub"));
+  await page.getByRole("button", { name: "Back to library" }).click();
+  // Simulate an existing EPUB record from before format/category metadata.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("folio-library");
+        request.onsuccess = () => {
+          const db = request.result,
+            tx = db.transaction("books", "readwrite"),
+            store = tx.objectStore("books"),
+            cursor = store.openCursor();
+          cursor.onsuccess = () => {
+            const row = cursor.result;
+            if (row) {
+              const value = row.value;
+              delete value.format;
+              delete value.collection;
+              row.update(value);
+              row.continue();
+            }
+          };
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+        request.onerror = () => reject(request.error);
+      }),
+  );
+  await page.reload();
+  await expect(page.locator(".book-card")).toHaveCount(1);
+  await page
+    .getByLabel("Import document file")
+    .setInputFiles(fixture("reading.pdf"));
+  await expect(page.locator(".page-count")).toHaveText("Page 1 of 2");
+  await page.getByRole("button", { name: "Bookmark", exact: true }).click();
+  await page.getByRole("button", { name: "Back to library" }).click();
+  await expect(
+    page.getByRole("button", { name: "Documents", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".book-card")).toHaveCount(1);
+  await expect(page.locator(".sample-card")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Move to Books", exact: true })
+    .click();
+  await expect(page.locator(".book-card")).toHaveCount(0);
+  await page.getByRole("button", { name: "Books", exact: true }).click();
+  await expect(page.locator(".book-card")).toHaveCount(2);
+  await page.reload();
+  await expect(page.locator(".book-card")).toHaveCount(2);
+  await page
+    .getByRole("button", { name: "Read The PDF Reading Guide", exact: false })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Bookmarked", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Back to library" }).click();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/documents/pdf/pdf.worker.min.js", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  try {
+    const requested = page.waitForRequest("**/documents/pdf/pdf.worker.min.js");
+    await page
+      .getByRole("button", { name: "Read The PDF Reading Guide" })
+      .click();
+    await requested;
+    await expect(
+      page.getByRole("button", { name: "Bookmark", exact: true }),
+    ).toBeDisabled();
+    await page.getByRole("button", { name: "Back to library" }).click();
+    await expect(page.locator(".busy-banner")).toHaveCount(0);
+    await expect(page.locator(".import-card")).toBeEnabled();
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+  await page.getByLabel("Import document file").setInputFiles({
+    name: "long.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(
+      "# doc017852202610300959501234567890123456789012345678901234567890\n\nA private reference document.",
+    ),
+  });
+  await expect(page.locator(".page-count")).toContainText("Page 1 of");
+  await page.getByRole("button", { name: "Back to library" }).click();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const card = page.locator(".book-card");
+    await expect(card).toHaveCount(1);
+    const title = await card.locator(".book-title").boundingBox(),
+      remove = await card
+        .getByRole("button", { name: /^Remove / })
+        .boundingBox(),
+      bounds = await card.boundingBox();
+    expect(title!.x + title!.width).toBeLessThanOrEqual(remove!.x);
+    expect(title!.x + title!.width).toBeLessThanOrEqual(
+      bounds!.x + bounds!.width,
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `test-results/library-documents-${width}.png`,
+      fullPage: true,
+    });
+  }
 });
