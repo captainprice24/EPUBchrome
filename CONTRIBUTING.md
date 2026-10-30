@@ -53,6 +53,10 @@ The cloud machine blocks unpacked extensions by administrator policy. HTTP-based
 | `entrypoints/reader` | React application entrypoint |
 | `src/App.tsx`, `src/style.css` | Library, reader and interaction UI |
 | `src/epub.ts` | Bounded ZIP access, EPUB parsing and sandboxed resource preparation |
+| `src/documents.ts`, `document-types.ts` | Document factory, format detection and size limits |
+| `src/reflow-document.ts`, `mobi-worker.ts` | Markdown/MOBI preparation with unchanged originals |
+| `src/fixed-document.ts`, `djvu-worker.ts`, `fixed-reader.ts` | Local PDF/DjVu decoding, original-page reading and zoom |
+| `src/useFullscreen.ts` | Browser fullscreen and distraction-free fallback |
 | `src/reader.ts` | Pagination, text anchors, reading layout and bounded background chapter counting |
 | `src/annotations.ts` | Text-offset selection and highlight restoration |
 | `src/store.ts` | IndexedDB models, file download helpers and local library operations |
@@ -65,8 +69,10 @@ For a plain browser inspection, build and run `node scripts/serve.mjs`, then ope
 
 ## Changes and reports
 
-Keep original EPUB bytes immutable. Store OCR and annotations separately. Do not remove size limits, weaken document isolation or bypass integrity checks to make a test pass. Describe unsupported content and failed operations clearly.
+Keep original document bytes immutable. Store OCR and annotations separately. Do not remove size limits, weaken document isolation or bypass integrity checks to make a test pass. Describe unsupported content and failed operations clearly.
 
 When reporting an issue, include the browser/OS, app revision, reproduction steps, expected behavior and redacted errors. Share only documents you have permission to distribute. Do not include OAuth tokens, private keys or personal library data.
 
 The project has not selected a source-code license yet. Consult the repository owner before reusing or distributing its original code; dependency licenses are described in [third-party notices](THIRD_PARTY_NOTICES.md).
+
+The asset preparation script applies a small, version-checked patch to the MIT MOBI parser. `scripts/patch-mobi.mjs` fixes section end bounds, body attributes/missing closing tags and optional EXTH metadata. Review and remove it when an upstream release supplies equivalent fixes; do not silently change the pinned parser or discard compatibility tests.

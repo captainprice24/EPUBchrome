@@ -1,6 +1,6 @@
 {
   "name": "epubchrome",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,11 +18,15 @@
     "format:check": "prettier --check src entrypoints tests scripts/*.mjs *.ts *.json"
   },
   "dependencies": {
+    "@lingo-reader/mobi-parser": "0.4.6",
     "@noble/hashes": "2.4.0",
     "@zip.js/zip.js": "2.24.0",
     "css-tree": "3.2.1",
     "dexie": "4.4.7",
+    "djvu-rs": "0.43.0",
     "dompurify": "3.4.17",
+    "marked": "18.1.2",
+    "pdfjs-dist": "6.4.299",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "tesseract.js": "7.0.0"
@@ -40,7 +44,7 @@
     "vite": "8.3.5",
     "wxt": "0.21.5"
   },
-  "description": "A local-first Chrome EPUB reader with bookmarks, highlights, on-device printed-text OCR and PDF printing.",
+  "description": "A private, local-first Chrome reader for EPUB, PDF, DjVu, MOBI and Markdown, with bookmarks, highlights, fullscreen reading and offline OCR.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/captainprice24/EPUBchrome.git"

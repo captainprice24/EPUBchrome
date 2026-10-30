@@ -1,4 +1,4 @@
-# Version 0.3 validation
+# Version 0.4 validation
 
 The production UI is exercised in Chromium using a local test server, with the same script/worker WASM CSP as the extension manifest. The environment administrator blocks unpacked extension loading, so toolbar startup, extension-origin permissions and real Google OAuth require a separate Chrome smoke test.
 
@@ -30,7 +30,7 @@ A separate three-test browser suite exercises the production web build at `/EPUB
 
 Four additional browser scenarios use an 80-paragraph EPUB chapter. They verify multi-page horizontal layout and counts, page turns without chapter jumps, exact page restoration after reopening, background chapter counts and book totals, reflow with a preserved passage, persistent font/theme/direction settings, multiple page bookmarks in one chapter, keyboard crossing of chapter boundaries, swipe turns, resize-driven repagination and narrow-screen layout. The original annotation/OCR/print tests remain in place and use the new page viewport where relevant.
 
-The full suite now contains 21 reader tests and 3 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
+The full suite now contains 29 reader tests and 5 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
 
 ## Audit regressions
 
@@ -39,3 +39,9 @@ Seven new audit scenarios cover XHTML self-closing markup, linked/imported/scope
 Three additional scenarios compile unmodified, pinned IDPF/W3C samples and verify imported-font rendering, Japanese content/Unicode identifiers and Arabic direction/pagination. See [corpus sources and licenses](../tests/corpus/README.md). A fresh `npm test` needs GitHub access to prepare the corpus; no upstream build scripts are executed. The existing OCR scenario now saves corrections, reopens them and checks results are not shown for another image.
 
 The [audit response](AUDIT_RESPONSE.md) distinguishes completed changes from deferred and modified recommendations. A small regression corpus is not an EPUB certification, and successful local tests do not establish a successful remote deployment.
+
+## Formats and fullscreen
+
+Eight new reader scenarios cover Markdown headings/tables/code and script/remote-resource isolation, DRM-free MOBI/PalmDOC metadata/chapters/images and body-boundary edge cases, PDF text selection/zoom/bookmark/resume/original-byte download, DjVu IW44/JB2/embedded-text reading, mixed-format backup/delete/restore, fullscreen/keyboard exit/passage preservation, a fullscreen API fallback and the larger-file DjVu Blob-range path. The last uses a small original DjVu fixture padded with an ignored IFF chunk beyond 64 MB; this verifies the alternate loading path, **not** performance on a complex 64 MB publication.
+
+Two new Pages tests check PDF/DjVu workers and WASM and MOBI/Markdown/fullscreen behavior under `/EPUBchrome/`. The MOBI6 tests include images, body attributes, missing closing tags and declared DRM rejection. KF8/hybrid support uses the library's separate parser but still needs a broader real-document corpus. Password-protected PDFs, unusual fonts/rotations, indirect DjVu, accessibility of every imported document and gigabyte-scale performance are not certified.

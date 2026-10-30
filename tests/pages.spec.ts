@@ -64,7 +64,7 @@ test("Pages OCR finds its packaged worker and model under the repository prefix"
   ]);
   await page.goto("/EPUBchrome/");
   await page
-    .getByLabel("Import EPUB file")
+    .getByLabel("Import document file")
     .setInputFiles(path.resolve("test-results/fixtures/scan.epub"));
   await expect(
     page
@@ -101,4 +101,81 @@ test("web preview explains Drive limits and adapts to a narrow screen", async ({
     path: "test-results/pages-mobile.png",
     fullPage: true,
   });
+});
+
+test("Pages PDF and DjVu find their local workers and WASM under the repository prefix", async ({
+  page,
+  context,
+}) => {
+  const creator = await context.newPage();
+  await creator.setContent(
+    "<html><head><title>Pages PDF</title><style>section+section{break-before:page}</style></head><body><section><h1>A private PDF</h1><p>Original document pages.</p></section><section><h1>A second page</h1></section></body></html>",
+  );
+  const pdf = await creator.pdf({ format: "A5" });
+  await creator.close();
+  const errors: string[] = [];
+  const requests: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("request", (r) => requests.push(r.url()));
+  await page.goto("/EPUBchrome/");
+  await page.getByLabel("Import document file").setInputFiles({
+    name: "pages.pdf",
+    mimeType: "application/pdf",
+    buffer: pdf,
+  });
+  const doc = page.frameLocator('iframe[title="Book chapter"]');
+  await expect(doc.locator(".textLayer")).toContainText("A private PDF");
+  await expect(page.locator(".page-count")).toHaveText("Page 1 of 2");
+  await page.getByRole("button", { name: "Next page", exact: true }).click();
+  await expect(doc.locator(".textLayer")).toContainText("A second page");
+  await page.getByRole("button", { name: "Back to library" }).click();
+  await page
+    .getByLabel("Import document file")
+    .setInputFiles(path.resolve("tests/fixtures/reading.djvu"));
+  await expect(page.locator(".page-count")).toHaveText("Page 1 of 3");
+  await expect(doc.locator(".djvu-text-layer")).toContainText(
+    "LOCAL DJVU PAGE 1",
+  );
+  expect(
+    requests.some((url) =>
+      url.endsWith("/EPUBchrome/documents/pdf/pdf.worker.min.js"),
+    ),
+  ).toBe(true);
+  expect(
+    requests.some((url) => url.includes("/EPUBchrome/assets/djvu-worker-")),
+  ).toBe(true);
+  expect(errors).toEqual([]);
+});
+test("Pages MOBI worker, Markdown navigation and fullscreen fallback use packaged assets", async ({
+  page,
+}) => {
+  execFileSync("python3", ["scripts/fixtures.py"]);
+  await page.addInitScript(() =>
+    Object.defineProperty(document, "fullscreenEnabled", { get: () => false }),
+  );
+  await page.goto("/EPUBchrome/");
+  await page
+    .getByLabel("Import document file")
+    .setInputFiles(path.resolve("test-results/fixtures/images.mobi"));
+  const doc = page.frameLocator('iframe[title="Book chapter"]');
+  await expect(
+    doc.getByRole("heading", { name: "A private beginning" }),
+  ).toBeVisible();
+  await expect(doc.locator("img")).toHaveJSProperty("naturalWidth", 8);
+  await page
+    .getByRole("button", { name: "Enter fullscreen", exact: true })
+    .click();
+  await expect(
+    page.getByText("Distraction-free view", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Exit fullscreen", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Back to library" }).click();
+  await page
+    .getByLabel("Import document file")
+    .setInputFiles(path.resolve("test-results/fixtures/sample.md"));
+  await expect(
+    doc.getByRole("heading", { name: "Field notes", exact: true }),
+  ).toBeVisible();
 });

@@ -78,7 +78,9 @@ test("unsafe content is isolated and malformed imports leave library usable", as
   page.on("request", (r) => {
     if (r.url().includes("blocked.invalid")) requests.push(r.url());
   });
-  await page.getByLabel("Import EPUB file").setInputFiles(fixture("unsafe"));
+  await page
+    .getByLabel("Import document file")
+    .setInputFiles(fixture("unsafe"));
   const doc = page.frameLocator('iframe[title="Book chapter"]');
   await expect(
     doc.getByRole("heading", { name: "A slower beginning" }),
@@ -89,7 +91,9 @@ test("unsafe content is isolated and malformed imports leave library usable", as
   ).toBeNull();
   expect(requests).toEqual([]);
   await page.getByRole("button", { name: "Back to library" }).click();
-  await page.getByLabel("Import EPUB file").setInputFiles(fixture("missing"));
+  await page
+    .getByLabel("Import document file")
+    .setInputFiles(fixture("missing"));
   await expect(page.getByRole("alert")).toContainText("Missing book resource");
   await expect(
     page.getByRole("button", { name: "Read The Quiet Atlas" }),
@@ -107,7 +111,7 @@ test("local browser OCR recognizes a scan with packaged worker, WASM and model",
   await imagePage.close();
   execFileSync("python3", ["scripts/fixtures.py", "test-results/scan.png"]);
   await page.goto("/reader.html");
-  await page.getByLabel("Import EPUB file").setInputFiles(fixture("scan"));
+  await page.getByLabel("Import document file").setInputFiles(fixture("scan"));
   await expect(
     page
       .frameLocator('iframe[title="Book chapter"]')
@@ -202,9 +206,13 @@ test("archive size metadata and traversal paths are rejected before extraction",
 }) => {
   execFileSync("python3", ["scripts/fixtures.py"]);
   await page.goto("/reader.html");
-  await page.getByLabel("Import EPUB file").setInputFiles(fixture("limits"));
+  await page
+    .getByLabel("Import document file")
+    .setInputFiles(fixture("limits"));
   await expect(page.getByRole("alert")).toContainText("expanded book exceeds");
-  await page.getByLabel("Import EPUB file").setInputFiles(fixture("traversal"));
+  await page
+    .getByLabel("Import document file")
+    .setInputFiles(fixture("traversal"));
   await expect(page.getByRole("alert")).toContainText(
     /Unsafe (archive path|filename)/,
   );

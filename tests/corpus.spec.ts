@@ -7,7 +7,7 @@ test.beforeAll(() => {
 async function open(page: Page, name: string) {
   await page.goto("/reader.html");
   await page
-    .getByLabel("Import EPUB file")
+    .getByLabel("Import document file")
     .setInputFiles(path.resolve(`test-results/corpus/${name}.epub`));
   await expect(page.locator(".page-count")).toContainText("Page 1 of");
   return page.frameLocator('iframe[title="Book chapter"]');

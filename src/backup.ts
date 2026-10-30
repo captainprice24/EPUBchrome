@@ -11,7 +11,8 @@ import { db, type Book, type Mark, type OCRNote } from "./store";
 import { contentHash } from "./content-hash";
 import { storageStatus } from "./storage";
 import type { TextLocator } from "./locators";
-import { Epub } from "./epub";
+import { openDocument } from "./documents";
+import { mimeTypes, type DocumentFormat } from "./document-types";
 configure({ useWebWorkers: false });
 const MAX_JSON = 16 * 1024 * 1024;
 type BookInfo = Omit<Book, "blob" | "cover"> & {
@@ -52,9 +53,15 @@ export async function backupLibrary(bookId?: string) {
   const books: BookInfo[] = [];
   try {
     for (const [i, book] of snapshot.books.entries()) {
-      const { blob, cover, ...info } = book;
+      const {
+        blob,
+        cover,
+        prepared: _prepared,
+        preparedVersion: _preparedVersion,
+        ...info
+      } = book;
       const hash = book.contentHash || (await contentHash(blob));
-      const file = `books/${i}.epub`,
+      const file = `books/${i}.${book.format || "epub"}`,
         coverFile = cover ? `covers/${i}.bin` : undefined;
       // EPUB is already compressed. Storing it avoids a costly second compression.
       await writer.add(file, new BlobReader(blob), { level: 0 });
@@ -70,7 +77,7 @@ export async function backupLibrary(bookId?: string) {
     }
     const manifest = JSON.stringify({
       format: "folio-library",
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       books,
       annotations: snapshot.annotations,
@@ -219,7 +226,7 @@ export async function restoreLibrary(file: File) {
       ),
     );
     if (
-      manifest.version !== 1 ||
+      ![1, 2].includes(Number(manifest.version)) ||
       (!notesOnly && manifest.format !== "folio-library")
     )
       throw Error("Unsupported Folio backup version.");
@@ -257,12 +264,23 @@ export async function restoreLibrary(file: File) {
         idMap.set(oldId, matches[0]!.id);
         continue;
       }
+      const format = item.format === undefined ? "epub" : string(item.format);
+      if (!["epub", "pdf", "djvu", "mobi", "md"].includes(format))
+        throw Error("Unsupported document format in backup.");
+      const documentFormat = format as DocumentFormat;
+      const fileName =
+        item.fileName === undefined
+          ? `${title}.${format}`
+          : string(item.fileName);
       const entry = entries.get(string(item.file));
       if (!entry || entry.directory || entry.uncompressedSize > 1024 ** 3)
         throw Error("Missing or oversized book in backup.");
-      const blob = await entry.getData(new BlobWriter("application/epub+zip"), {
-        checkSignature: true,
-      });
+      const blob = await entry.getData(
+        new BlobWriter(mimeTypes[documentFormat]),
+        {
+          checkSignature: true,
+        },
+      );
       const hash = await contentHash(blob);
       if (item.contentHash !== hash)
         throw Error(`Book checksum does not match: ${title}`);
@@ -283,9 +301,10 @@ export async function restoreLibrary(file: File) {
         idMap.set(oldId, match.id);
         continue;
       }
-      const parser = new Epub(blob);
+      const parser = await openDocument(blob, documentFormat, fileName);
+      let prepared: Blob | undefined;
       try {
-        await parser.open();
+        prepared = parser.prepared;
         if (
           metadata.chapter >= parser.chapters.length ||
           metadata.chapterCount !== parser.linearCount
@@ -317,6 +336,10 @@ export async function restoreLibrary(file: File) {
         blob,
         cover,
         contentHash: hash,
+        format: documentFormat,
+        fileName,
+        prepared,
+        preparedVersion: prepared ? 1 : undefined,
         ...metadata,
       };
       imported.push(book);

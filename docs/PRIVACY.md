@@ -1,6 +1,6 @@
 # Privacy and local data
 
-Folio v0.3 stores imported EPUB copies, reading positions, bookmarks, highlights and OCR records in IndexedDB in the current browser profile. Original files are not rewritten. OCR records and annotations are separate from the book bytes.
+Folio v0.4 stores imported document copies, reading positions, bookmarks, highlights and OCR records in IndexedDB in the current browser profile. Original files are not rewritten. OCR records and annotations are separate from the original bytes. MOBI and Markdown also have a derived, local reading copy; the original remains unchanged. PDF and DjVu pages are decoded locally. No PDF JavaScript, interactive forms or embedded actions are executed by the reader.
 
 ## Network activity
 

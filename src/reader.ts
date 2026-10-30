@@ -8,6 +8,7 @@ export interface ReadingSettings {
   lineHeight: number;
   margin: "narrow" | "comfortable" | "wide";
   theme: ReadingTheme;
+  zoom?: number;
 }
 export interface PageSnapshot {
   page: number;
@@ -57,13 +58,15 @@ html[data-reading-mode="vertical"] #folio-content{width:var(--folio-w)!important
 </style></head>`,
   );
 }
-interface Options {
+export interface Options {
   offset?: number;
   progress?: number;
   page?: number | "last";
   onChange?: (page: PageSnapshot) => void;
   onBoundary?: (direction: number) => void;
   interactive?: boolean;
+  onDocumentPage?: (index: number) => void;
+  documentPages?: number;
 }
 export class Paginator {
   readonly viewport: HTMLElement;
@@ -74,6 +77,7 @@ export class Paginator {
   private total = 1;
   private current = 1;
   private offset = 0;
+  private layoutAnchor?: { offset: number; scroll: number };
   private disposed = false;
   private resize?: ResizeObserver;
   private frame = 0;
@@ -341,7 +345,7 @@ export class Paginator {
           : offset !== undefined
             ? this.pageForOffset(offset)
             : 1 + Math.round(progress * (this.total - 1));
-    this.goToPage(target);
+    this.movePage(target, offset);
   }
   pageForOffset(offset: number) {
     let low = 0,
@@ -431,7 +435,12 @@ export class Paginator {
       this.total,
       Math.max(1, 1 + Math.floor((scroll + 1) / Math.max(1, size))),
     );
-    this.offset = this.options.interactive === false ? 0 : this.capture();
+    if (this.layoutAnchor && Math.abs(scroll - this.layoutAnchor.scroll) < 1)
+      this.offset = this.layoutAnchor.offset;
+    else {
+      this.layoutAnchor = undefined;
+      this.offset = this.options.interactive === false ? 0 : this.capture();
+    }
     this.options.onChange?.({
       page: this.current,
       pages: this.total,
@@ -445,6 +454,9 @@ export class Paginator {
     });
   }
   goToPage(page: number) {
+    this.movePage(page);
+  }
+  private movePage(page: number, anchor?: number) {
     if (this.disposed) return;
     this.current = Math.max(1, Math.min(this.total, Math.round(page)));
     if (this.settings.mode === "horizontal")
@@ -460,10 +472,20 @@ export class Paginator {
         top: (this.current - 1) * this.viewport.clientHeight,
         behavior: "instant",
       });
+    this.layoutAnchor =
+      anchor === undefined
+        ? undefined
+        : {
+            offset: anchor,
+            scroll:
+              this.settings.mode === "horizontal"
+                ? this.scrollX
+                : this.viewport.scrollTop,
+          };
     this.publish();
   }
   goToOffset(offset: number) {
-    this.goToPage(this.pageForOffset(offset));
+    this.movePage(this.pageForOffset(offset), offset);
   }
   goToElement(el: Element) {
     const rect = el.getBoundingClientRect(),

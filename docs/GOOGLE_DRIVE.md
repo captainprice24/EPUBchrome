@@ -15,7 +15,7 @@ Local reading works without Google. Drive import is an optional integration for 
    ```
 
 6. Run `npm run build`, reload Folio in `chrome://extensions`, and use **Open from Drive**.
-7. Paste an EPUB file URL or file ID. Select **Connect & open**, sign in to the account with access, and approve the requested read-only scope.
+7. Paste an supported document URL or file ID. Select **Connect & open**, sign in to the account with access, and approve the requested read-only scope.
 
 The build places the client ID in the manifest’s `oauth2` section. Confirm that section is present when diagnosing a configuration issue. The client ID is public application configuration. Never add a client secret, access token or private extension signing key to the repository.
 
@@ -40,3 +40,5 @@ The download is streamed to temporary origin-private browser storage before impo
 - **Download/storage error:** check connectivity, file size, quotas and available free browser storage.
 
 Do not paste credentials into issues, logs or screenshots. Include only redacted error messages and the steps needed to reproduce a problem.
+
+Configured v0.4 builds accept the same EPUB/PDF/DjVu/MOBI/Markdown formats as local import, applying each format’s size limit before/during download. The integration still needs live-account validation.

@@ -40,7 +40,7 @@ test("audit XHTML, linked CSS, imports and supplementary links preserve content 
   });
   await page.goto("/reader.html");
   await page
-    .getByLabel("Import EPUB file")
+    .getByLabel("Import document file")
     .setInputFiles(path.resolve("test-results/fixtures/audit.epub"));
   const doc = bookFrame(page);
   await expect(
@@ -73,7 +73,7 @@ test("RTL pages advance, reflow and resume in logical reading order", async ({
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.goto("/reader.html");
   await page
-    .getByLabel("Import EPUB file")
+    .getByLabel("Import document file")
     .setInputFiles(path.resolve("test-results/fixtures/audit.epub"));
   await expect(page.locator(".page-count")).toContainText("Page 1 of");
   await page.getByRole("button", { name: "Next chapter" }).click();

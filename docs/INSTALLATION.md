@@ -18,7 +18,7 @@ In Chrome, open `chrome://extensions`, enable **Developer mode**, choose **Load 
 
 ## Read a book
 
-Choose **Import a book** or drag an EPUB into the window. The original file remains untouched. Select a chapter from **Contents**. Reading opens in horizontal pages by default, with **Page X of Y** for the current chapter and a page-position slider. Previous/next page buttons turn within a chapter and cross to the adjacent chapter only at its ends. The small chapter arrows above the book skip directly between chapters.
+Choose **Import a book** or drag an EPUB, PDF, DjVu, MOBI or Markdown document into the window. The original file remains untouched. Select a chapter from **Contents**. Reading opens in horizontal pages by default, with **Page X of Y** for the current chapter and a page-position slider. Previous/next page buttons turn within a chapter and cross to the adjacent chapter only at its ends. The small chapter arrows above the book skip directly between chapters.
 
 Open **Reading settings** in the toolbar to choose **Horizontal pages** or **Vertical reading**. Horizontal mode supports left/right keys, Page Up/Down, mouse-wheel page turns and horizontal swipes. Vertical mode supports natural scrolling and viewport-sized page steps; left/right and Page Up/Down turn pages, and up/down keys also advance a page while focused in the chapter. Home/End go to the first/last page of the chapter.
 
@@ -54,7 +54,7 @@ Review every result for errors. Model confidence is an engine estimate, not a ca
 npm run package
 ```
 
-The generated `.output/folio-0.3.0-chrome.zip` contains the production extension and local OCR assets. Extract it before using **Load unpacked**. The source ZIP from GitHub must be built first.
+The generated `.output/folio-0.4.0-chrome.zip` contains the production extension and local OCR assets. Extract it before using **Load unpacked**. The source ZIP from GitHub must be built first.
 
 After updating source, run `npm ci` and `npm run build`, then click **Reload** for Folio in `chrome://extensions`. Keep the extension ID and Chrome profile stable to preserve the same local storage and OAuth configuration.
 
@@ -74,12 +74,12 @@ After updating source, run `npm ci` and `npm run build`, then click **Reload** f
 
 ## Current limits
 
-| Area | v0.3 behavior |
+| Area | v0.4 behavior |
 | --- | --- |
-| Input | DRM-free `.epub` files; 1 GB compressed safety ceiling, not benchmarked supported capacity |
+| Input | EPUB/PDF/DjVu: 1 GB; MOBI: 64 MB; Markdown: 16 MB. DRM-free, with format-specific limits in [FORMATS.md](FORMATS.md) |
 | ZIP | At most 30,000 entries, 2 GB declared expanded size, 64 MB per extracted entry; suspicious compression and unsafe paths rejected |
 | Resources | 128 MB loaded-resource budget; very large individual chapters or image sets may fail |
-| Rendering | Horizontal pages or vertical reading; native fixed-layout viewport fidelity, advanced SVG/media, scripted content and nested CSS imports are incomplete or unsupported |
+| Rendering | Horizontal pages or vertical reading; native fixed-layout viewport fidelity, advanced SVG/media, scripted content and some CSS import forms remain incomplete or unsupported |
 | Page numbers | Publisher page lists when supplied; no invented universal page count for reflowable books |
 | Print | At most 300 chapters and 16 MB assembled markup; actual decoded image memory may be much larger |
 | OCR | Printed English, under 40 megapixels per image; review results manually |
@@ -89,8 +89,16 @@ See [validation coverage](VALIDATION.md) for the tests performed and pending com
 
 ## Back up or move your library
 
-In the library footer open **Storage & backup**. Check protection status and storage usage, then choose the entire library or an individual book and select **Back up library**. The downloaded `.folio` file contains original EPUBs, covers, reading positions, annotations and OCR. It is not encrypted. Keep it somewhere safe.
+In the library footer open **Storage & backup**. Check protection status and storage usage, then choose the entire library or an individual book and select **Back up library**. The downloaded `.folio` file contains original documents, covers, reading positions, annotations and OCR. It is not encrypted. Keep it somewhere safe.
 
 Choose **Restore / import notes** and select a `.folio` file on the destination device/profile. Restore accepts archives below 2 GB, verifies book checksums and merges matching books without replacing existing notes or reading positions. Large libraries can be backed up one book at a time. The extension and Pages preview have separate libraries; a backup can transfer data between them. Persistence protects against automatic eviction where granted, but cannot prevent deliberate data clearing or uninstall loss.
 
 For v0.2 libraries, passage quotes are captured with the old renderer before corrected chapters are displayed. Ambiguous or missing highlights remain in the saved list with **Location needs review**. Their text is preserved. Current saved page labels describe the layout at creation; page numbers change with text settings.
+
+## Fullscreen and fixed-page documents
+
+Choose **Enter fullscreen** in the reader toolbar, or press **F** while reading. The library navigation and regular toolbars disappear; settings, page controls and a visible **Exit fullscreen** remain. Press **Esc** to leave. Unsupported browsers use distraction-free reading within the tab. Your passage is preserved when the layout changes.
+
+PDF and DjVu use original page numbers rather than artificial chapter counts. Use the page slider and arrow/Page keys to navigate. **Zoom in/out** enlarges the page; **Fit page** resets zoom. Zoom percentages are relative to the fit layout. Horizontal mode fits the page; vertical mode fits its width and scrolls within the current page, continuing through the document with page controls or boundary scrolling. This release does not provide a continuous, all-pages PDF strip.
+
+Fonts and margins inside PDF/DjVu pages are preserved. Their appearance theme changes the surrounding reading room rather than inverting the document. **Download original PDF** saves the unchanged source. DjVu printing rasterizes the current page; it is not a vector or OCR-layer PDF export. See [format details](FORMATS.md).

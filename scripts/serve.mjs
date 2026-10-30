@@ -7,6 +7,7 @@ const prefix = pages ? "/EPUBchrome/" : "/";
 const types = {
   ".html": "text/html",
   ".js": "text/javascript",
+  ".mjs": "text/javascript",
   ".css": "text/css",
   ".wasm": "application/wasm",
   ".epub": "application/epub+zip",

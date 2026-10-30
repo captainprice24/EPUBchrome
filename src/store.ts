@@ -1,6 +1,11 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { TextLocator } from "./locators";
+import type { DocumentFormat } from "./document-types";
 export interface Book {
+  format?: DocumentFormat;
+  fileName?: string;
+  prepared?: Blob;
+  preparedVersion?: number;
   id: string;
   title: string;
   author: string;

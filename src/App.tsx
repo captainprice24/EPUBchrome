@@ -19,6 +19,17 @@ import {
   type Mark,
 } from "./store";
 import { Epub, readerDocument, type Rendered } from "./epub";
+import { openDocument } from "./documents";
+import {
+  detectFormat,
+  checkDocumentSize,
+  documentAccept,
+  formatNames,
+  type DocumentEngine,
+  type DocumentFormat,
+} from "./document-types";
+import { FixedPaginator, createFixedReadingDocument } from "./fixed-reader";
+import { useReaderFullscreen } from "./useFullscreen";
 import { applyHighlights, selectionOffsets } from "./annotations";
 import { driveImport } from "./drive";
 import { Icon } from "./icons";
@@ -170,6 +181,43 @@ function Button({
     </button>
   );
 }
+function ZoomControls({
+  zoom,
+  onChange,
+}: {
+  zoom: number;
+  onChange: (value: number | ((previous: number) => number)) => void;
+}) {
+  return (
+    <div className="native-zoom">
+      <button
+        className="icon-btn"
+        aria-label="Zoom out"
+        onClick={() =>
+          onChange((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))
+        }
+      >
+        −
+      </button>
+      <button
+        className="text-button"
+        aria-label={`Fit page ${Math.round(zoom * 100)}%`}
+        onClick={() => onChange(1)}
+      >
+        {Math.round(zoom * 100)}%
+      </button>
+      <button
+        className="icon-btn"
+        aria-label="Zoom in"
+        onClick={() =>
+          onChange((z) => Math.min(4, Math.round((z + 0.25) * 100) / 100))
+        }
+      >
+        +
+      </button>
+    </div>
+  );
+}
 export function App() {
   const webPreview = import.meta.env.MODE === "pages";
   const [books, setBooks] = useState<Book[]>([]),
@@ -186,7 +234,7 @@ export function App() {
     >(null),
     [deleteId, setDeleteId] = useState<string | null>(null);
   const [chapter, setChapter] = useState(0),
-    [engine, setEngine] = useState<Epub | null>(null),
+    [engine, setEngine] = useState<DocumentEngine | null>(null),
     [rendered, setRendered] = useState<Rendered | null>(null),
     [chapterLoading, setChapterLoading] = useState(false),
     [tab, setTab] = useState("contents"),
@@ -244,6 +292,10 @@ export function App() {
   const resumeLocator = useRef<TextLocator | undefined>(undefined);
   const restoreInput = useRef<HTMLInputElement>(null);
   const [ocrNoteId, setOcrNoteId] = useState<string | null>(null);
+  const [pageZoom, setPageZoom] = useState(1);
+  const fullscreen = useReaderFullscreen(!!selectedId);
+  const fixedPages = !!engine?.fixedPages;
+  const paper = useRef<HTMLDivElement>(null);
   const dark = theme === "night";
   const settings = useMemo<ReadingSettings>(
     () => ({
@@ -253,14 +305,18 @@ export function App() {
       lineHeight: spacing,
       margin,
       theme,
+      zoom: pageZoom,
     }),
-    [mode, font, fontChoice, spacing, margin, theme],
+    [mode, font, fontChoice, spacing, margin, theme, pageZoom],
   );
   const [pageInfo, setPageInfo] = useState<PageSnapshot | null>(null);
   const [dimensions, setDimensions] = useState<{
     width: number;
     height: number;
   } | null>(null);
+  const fixedRenderKey = fixedPages
+    ? JSON.stringify([pageZoom, mode, dimensions?.width, dimensions?.height])
+    : "";
   const [chapterCounts, setChapterCounts] = useState<number[]>([]);
   const [counting, setCounting] = useState(false);
   const [driveLink, setDriveLink] = useState(""),
@@ -286,7 +342,7 @@ export function App() {
     position = useRef(0),
     textOffset = useRef<number | undefined>(undefined),
     requestedPage = useRef<number | "last" | undefined>(undefined),
-    paginator = useRef<Paginator | null>(null),
+    paginator = useRef<Paginator | FixedPaginator | null>(null),
     countsKey = useRef(""),
     countsRef = useRef<number[]>([]);
   const active = books.find((b) => b.id === selectedId);
@@ -339,22 +395,18 @@ export function App() {
     return () => narrow.removeEventListener("change", change);
   }, []);
   const importFile = async (file: File) => {
-    if (file.size > 1024 ** 3) {
-      setError("This version supports EPUB files up to 1 GB.");
-      return;
-    }
-    if (
-      !file.name.toLowerCase().endsWith(".epub") &&
-      file.type !== "application/epub+zip"
-    ) {
-      setError("Choose a file ending in .epub.");
+    let format: DocumentFormat;
+    try {
+      format = detectFormat(file.name, file.type);
+      checkDocumentSize(file, format);
+    } catch (error) {
+      setError(message(error));
       return;
     }
     setError("");
-    setBusy("Opening your book…");
-    const parser = new Epub(file);
+    setBusy("Opening your document…");
+    let parser: DocumentEngine | undefined;
     try {
-      await parser.open();
       const hash = await contentHash(file);
       let existing = await db.books.where("contentHash").equals(hash).first();
       if (!existing) {
@@ -378,9 +430,14 @@ export function App() {
         );
         return;
       }
+      parser = await openDocument(file, format, file.name);
       await storageStatus(true);
       const estimate = await navigator.storage.estimate();
-      if (estimate.quota && file.size > estimate.quota - (estimate.usage || 0))
+      if (
+        estimate.quota &&
+        file.size + (parser.prepared?.size || 0) >
+          estimate.quota - (estimate.usage || 0)
+      )
         throw Error(
           "There is not enough browser storage for this book. Remove a book or free up storage and try again.",
         );
@@ -393,6 +450,10 @@ export function App() {
         }
       const book: Book = {
         id: crypto.randomUUID(),
+        format,
+        fileName: file.name,
+        prepared: parser.prepared,
+        preparedVersion: parser.prepared ? 1 : undefined,
         title: parser.title,
         author: parser.author,
         size: file.size,
@@ -418,7 +479,7 @@ export function App() {
           : message(e),
       );
     } finally {
-      await parser.close().catch(() => {});
+      await parser?.close().catch(() => {});
       setBusy("");
     }
   };
@@ -444,15 +505,24 @@ export function App() {
       return;
     }
     let canceled = false;
-    let parser: Epub | undefined;
+    let parser: DocumentEngine | undefined;
     setBusy("Opening your book…");
     setRendered(null);
     void (async () => {
       let book = await db.books.get(selectedId);
       if (!book) throw Error("This book is no longer in the library.");
-      parser = new Epub(book.blob);
-      await parser.open();
-      book = await migrateLocators(book, parser);
+      parser = await openDocument(
+        book.blob,
+        book.format || "epub",
+        book.fileName || book.title,
+        book.preparedVersion === 1 ? book.prepared : undefined,
+      );
+      if (canceled) {
+        await parser.close();
+        return;
+      }
+      if (parser instanceof Epub && (book.format || "epub") === "epub")
+        book = await migrateLocators(book, parser);
       await refresh();
       if (canceled) {
         await parser.close();
@@ -486,6 +556,13 @@ export function App() {
   }, [selectedId]);
   useEffect(() => {
     if (!engine || engineId.current !== selectedId) return;
+    if (engine.fixedPages && !dimensions && paper.current) {
+      setDimensions({
+        width: paper.current.clientWidth,
+        height: paper.current.clientHeight,
+      });
+      return;
+    }
     const seq = ++loadSequence.current;
     const controller = new AbortController();
     let cancel = false;
@@ -497,7 +574,17 @@ export function App() {
     setRendered(null);
     engine.releaseResources();
     void engine
-      .render(chapter, controller.signal)
+      .render(chapter, controller.signal, {
+        width:
+          dimensions?.width || paper.current?.clientWidth || window.innerWidth,
+        height:
+          dimensions?.height ||
+          paper.current?.clientHeight ||
+          window.innerHeight,
+        zoom: pageZoom,
+        mode,
+        pixelRatio: Math.min(3, Math.max(1.5, window.devicePixelRatio || 1)),
+      })
       .then((r) => {
         if (!cancel && seq === loadSequence.current) {
           setRendered(r);
@@ -518,7 +605,7 @@ export function App() {
       cancel = true;
       controller.abort();
     };
-  }, [engine, chapter, selectedId]);
+  }, [engine, chapter, selectedId, fixedRenderKey]);
   useEffect(() => {
     const doc = frame.current?.contentDocument;
     if (doc?.body)
@@ -551,6 +638,10 @@ export function App() {
     } else setChapter(next);
   }
   function turnPage(direction: number) {
+    if (fixedPages && !paginator.current) {
+      navigate(chapter + direction);
+      return;
+    }
     paginator.current?.turn(direction);
   }
   function goHref(href: string) {
@@ -588,11 +679,11 @@ export function App() {
       resumeLocator.current = undefined;
     }
     paginator.current?.destroy();
-    const controller = new Paginator(doc, settings, {
+    const paginationOptions = {
       offset: textOffset.current,
       progress: position.current,
       page: requestedPage.current,
-      onBoundary: (direction) => {
+      onBoundary: (direction: number) => {
         if (
           direction < 0 &&
           chapterIndex > 0 &&
@@ -606,7 +697,7 @@ export function App() {
         )
           navigate(chapterIndex + 1);
       },
-      onChange: (s) => {
+      onChange: (s: PageSnapshot) => {
         if (seq !== loadSequence.current) return;
         position.current = s.progress;
         textOffset.current = s.offset;
@@ -619,7 +710,9 @@ export function App() {
         );
         if (countsKey.current !== s.key) {
           countsKey.current = s.key;
-          countsRef.current = Array(engine.chapters.length).fill(0);
+          countsRef.current = Array(engine.chapters.length).fill(
+            engine.fixedPages ? 1 : 0,
+          );
         }
         if (countsRef.current[chapterIndex] !== s.pages) {
           const counts = [...countsRef.current];
@@ -638,14 +731,19 @@ export function App() {
                 engine.chapters[chapterIndex]!.href,
                 s.offset,
               ),
-              page: s.page,
-              pageCount: s.pages,
+              page: engine.fixedPages ? chapterIndex + 1 : s.page,
+              pageCount: engine.fixedPages ? engine.linearCount : s.pages,
               readingMode: doc.documentElement.dataset
                 .readingMode as ReadingMode,
             })
             .catch((e) => setError(message(e)));
       },
-    });
+      onDocumentPage: (index: number) => navigate(index),
+      documentPages: engine.linearCount,
+    };
+    const controller = rendered?.fixedPage
+      ? new FixedPaginator(doc, settings, rendered.fixedPage, paginationOptions)
+      : new Paginator(doc, settings, paginationOptions);
     paginator.current = controller;
     void controller
       .start()
@@ -662,6 +760,20 @@ export function App() {
       .catch((e) => setError(message(e)));
     doc.addEventListener("mouseup", () => setSelection(selectionOffsets(doc)));
     doc.addEventListener("keyup", () => setSelection(selectionOffsets(doc)));
+    doc.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") fullscreen.exit();
+      if (
+        event.key.toLowerCase() === "f" &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        doc.getSelection()?.isCollapsed &&
+        !(event.target as Element).closest("input,textarea,select")
+      ) {
+        event.preventDefault();
+        fullscreen.toggle();
+      }
+    });
     doc.addEventListener("click", (e) => {
       const a = (e.target as Element).closest("a");
       if (a) {
@@ -675,6 +787,7 @@ export function App() {
     if (
       !selectedId ||
       !engine ||
+      engine.fixedPages ||
       engineId.current !== selectedId ||
       !dimensions
     )
@@ -682,7 +795,7 @@ export function App() {
     const key = layoutKey(settings, dimensions.width, dimensions.height);
     let canceled = false;
     const abort = new AbortController();
-    let parser: Epub | undefined;
+    let parser: DocumentEngine | undefined;
     const counter = new ChapterCounter(dimensions.width, dimensions.height);
     setCounting(true);
     void (async () => {
@@ -699,8 +812,12 @@ export function App() {
       countsKey.current = key;
       countsRef.current = values;
       setChapterCounts(values);
-      parser = new Epub(book.blob);
-      await parser.open();
+      parser = await openDocument(
+        book.blob,
+        book.format || "epub",
+        book.fileName || book.title,
+        book.preparedVersion === 1 ? book.prepared : undefined,
+      );
       for (let i = 0; i < engine.chapters.length; i++) {
         if (canceled) break;
         if (
@@ -752,6 +869,17 @@ export function App() {
     if (!selectedId || modal) return;
     const key = (e: KeyboardEvent) => {
       if (
+        e.key.toLowerCase() === "f" &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !(e.target as Element).closest("input,textarea,select")
+      ) {
+        e.preventDefault();
+        fullscreen.toggle();
+        return;
+      }
+      if (
         (e.target as Element).closest("input,textarea,select,button") ||
         e.ctrlKey ||
         e.metaKey ||
@@ -782,13 +910,14 @@ export function App() {
   const currentBookmark = currentMarks.find(
     (m) =>
       m.kind === "bookmark" &&
-      !m.unresolved &&
-      !!m.locator &&
+      (fixedPages || (!m.unresolved && !!m.locator)) &&
       pageInfo &&
-      (bookmarkOffset(m) !== undefined
-        ? paginator.current?.pageForOffset(bookmarkOffset(m)!) === pageInfo.page
-        : 1 + Math.round((m.position || 0) * (pageInfo.pages - 1)) ===
-          pageInfo.page),
+      (fixedPages ||
+        (bookmarkOffset(m) !== undefined
+          ? paginator.current?.pageForOffset(bookmarkOffset(m)!) ===
+            pageInfo.page
+          : 1 + Math.round((m.position || 0) * (pageInfo.pages - 1)) ===
+            pageInfo.page)),
   );
   const addBookmark = async () => {
     if (!active || !engine) return;
@@ -805,7 +934,9 @@ export function App() {
       chapter,
       chapterTitle: engine.chapters[chapter]!.title,
       kind: "bookmark",
-      text: `Page ${pageInfo?.page || 1} · ${engine.chapters[chapter]!.title}`,
+      text: fixedPages
+        ? engine.chapters[chapter]!.title
+        : `Page ${pageInfo?.page || 1} · ${engine.chapters[chapter]!.title}`,
       textOffset: pageInfo?.offset,
       locator: frame.current?.contentDocument
         ? quoteLocator(
@@ -814,8 +945,8 @@ export function App() {
             pageInfo?.offset || 0,
           )
         : undefined,
-      page: pageInfo?.page,
-      pageCount: pageInfo?.pages,
+      page: fixedPages ? chapter + 1 : pageInfo?.page,
+      pageCount: fixedPages ? engine.linearCount : pageInfo?.pages,
       readingMode: mode,
       position: position.current,
       created: Date.now(),
@@ -1037,6 +1168,10 @@ export function App() {
   }, [modal, active?.id, chapter, ocrImage, rendered]);
   const print = async () => {
     if (!engine) return;
+    if (engine.format === "pdf" && active) {
+      download(active.blob, active.fileName || `${active.title}.pdf`);
+      return;
+    }
     const controller = new AbortController();
     printAbort.current = controller;
     let printFrame: HTMLIFrameElement | undefined;
@@ -1046,7 +1181,7 @@ export function App() {
     try {
       let content = "";
       const indices =
-        printScope === "book"
+        printScope === "book" && !engine.fixedPages
           ? engine.chapters.flatMap((c, i) => (c.linear ? [i] : []))
           : [chapter];
       if (indices.length > 300)
@@ -1057,10 +1192,19 @@ export function App() {
         setBusy(
           `Preparing chapter ${indices.indexOf(i) + 1} of ${indices.length}…`,
         );
-        const r = await engine.render(i, controller.signal);
+        const r = await engine.render(i, controller.signal, {
+          width: 1754,
+          height: 2480,
+          zoom: 1,
+          mode: "horizontal",
+          pixelRatio: 1,
+        });
         if (r.warnings.length)
           throw Error("Review this chapter before printing: " + r.warnings[0]);
-        content += `<section class="folio-print-chapter">${r.html}</section>`;
+        const pageContent = r.fixedPage
+          ? `<img src="${r.images[0]?.src}" alt="Page ${i + 1}" style="width:100%;height:auto"/>`
+          : r.html;
+        content += `<section class="folio-print-chapter">${pageContent}</section>`;
         if (content.length > 16 * 1024 * 1024)
           throw Error(
             "This print layout is too large. Print individual chapters instead.",
@@ -1170,7 +1314,8 @@ export function App() {
     void fn().catch((e) => setError(message(e)));
   return (
     <div
-      className={`app ${selectedId ? "reading" : ""} ${dark ? "night" : ""} ${theme === "sepia" ? "sepia" : ""}`}
+      ref={fullscreen.ref}
+      className={`app ${fullscreen.enabled ? "immersive" : ""} ${fixedPages ? "native-reading" : ""} ${selectedId ? "reading" : ""} ${dark ? "night" : ""} ${theme === "sepia" ? "sepia" : ""}`}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -1193,9 +1338,9 @@ export function App() {
       )}
       <input
         ref={input}
-        aria-label="Import EPUB file"
+        aria-label="Import document file"
         type="file"
-        accept=".epub,application/epub+zip"
+        accept={documentAccept}
         hidden
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -1329,7 +1474,7 @@ export function App() {
                     </Button>
                   </div>
                   <span className="import-hint">
-                    EPUB files · Drag & drop anywhere · Private by default
+                    EPUB · PDF · DjVu · MOBI · Markdown · Private by default
                   </span>
                 </div>
                 <div className="welcome-art" aria-hidden="true">
@@ -1451,10 +1596,16 @@ export function App() {
                           />
                         </div>
                         <span className="book-detail">
-                          Ch. {book.chapter + 1}
-                          {book.page
-                            ? ` · Page ${book.page} of ${book.pageCount || "—"}`
-                            : ` of ${book.chapterCount}`}
+                          {book.format === "pdf" || book.format === "djvu" ? (
+                            `${formatNames[book.format]} · Page ${book.chapter + 1} of ${book.chapterCount}`
+                          ) : (
+                            <>
+                              Ch. {book.chapter + 1}
+                              {book.page
+                                ? ` · Page ${book.page} of ${book.pageCount || "—"}`
+                                : ` of ${book.chapterCount}`}
+                            </>
+                          )}
                           <span>{bytes(book.size)}</span>
                         </span>
                       </div>
@@ -1507,7 +1658,7 @@ export function App() {
                     </span>
                     <strong>Room for one more.</strong>
                     <p>Bring your next read along.</p>
-                    <small>Choose an EPUB file</small>
+                    <small>Choose a document file</small>
                   </button>
                 </div>
               ) : (
@@ -1596,7 +1747,7 @@ export function App() {
                   Export notes
                 </button>
               }
-              <span>EPUB · Offline reading · Your books, your space</span>
+              <span>Offline reading · Your documents, your space</span>
             </footer>
           </main>
         </>
@@ -1639,11 +1790,34 @@ export function App() {
               </button>
               <button
                 className="icon-btn"
-                title="Print or save as PDF"
-                aria-label="Print or save as PDF"
-                onClick={() => setModal("print")}
+                aria-label="Enter fullscreen"
+                title="Fullscreen (F)"
+                onClick={fullscreen.toggle}
               >
-                <Icon name="print" />
+                <Icon name="expand" />
+              </button>
+              <button
+                className="icon-btn"
+                title={
+                  engine?.format === "pdf"
+                    ? "Download original PDF"
+                    : "Print or save as PDF"
+                }
+                aria-label={
+                  engine?.format === "pdf"
+                    ? "Download original PDF"
+                    : "Print or save as PDF"
+                }
+                onClick={() =>
+                  engine?.format === "pdf" && active
+                    ? download(
+                        active.blob,
+                        active.fileName || `${active.title}.pdf`,
+                      )
+                    : setModal("print")
+                }
+              >
+                <Icon name={engine?.format === "pdf" ? "download" : "print"} />
               </button>
               <button
                 className="icon-btn"
@@ -1653,16 +1827,23 @@ export function App() {
               >
                 <Icon name="settings" />
               </button>
-              <span className="tool-separator" />
+              {fixedPages && (
+                <ZoomControls zoom={pageZoom} onChange={setPageZoom} />
+              )}
+              <span className="tool-separator" hidden={fixedPages} />
               <button
+                hidden={fixedPages}
                 className="icon-btn font-button"
                 aria-label="A− Decrease font size"
                 onClick={() => setFont((v) => Math.max(14, v - 1))}
               >
                 A−
               </button>
-              <span className="font-value">{font}</span>
+              <span className="font-value" hidden={fixedPages}>
+                {font}
+              </span>
               <button
+                hidden={fixedPages}
                 className="icon-btn font-button"
                 aria-label="A+ Increase font size"
                 onClick={() => setFont((v) => Math.min(36, v + 1))}
@@ -1682,6 +1863,32 @@ export function App() {
               </button>
             </div>
           </header>
+          {fullscreen.enabled && (
+            <div className="immersive-controls">
+              <button
+                className="text-button"
+                aria-label="Reading settings"
+                onClick={() => setModal("reading")}
+              >
+                <Icon name="settings" size={17} /> Settings
+              </button>
+              <span>
+                {fullscreen.fallback
+                  ? "Distraction-free view"
+                  : "Fullscreen reading"}
+              </span>
+              {fixedPages && (
+                <ZoomControls zoom={pageZoom} onChange={setPageZoom} />
+              )}
+              <button
+                className="text-button"
+                aria-label="Exit fullscreen"
+                onClick={fullscreen.exit}
+              >
+                <Icon name="contract" size={17} /> Exit fullscreen
+              </button>
+            </div>
+          )}
           <div className="reader-layout">
             {sidebar && (
               <aside className="reader-sidebar">
@@ -1763,6 +1970,12 @@ export function App() {
                   {tab === "contents" ? (
                     <>
                       <div className="toc-heading">TABLE OF CONTENTS</div>
+                      {fixedPages && !engine?.toc.length && (
+                        <p className="pagination-note">
+                          {engine?.linearCount} original pages. Use the page
+                          slider to go anywhere in the document.
+                        </p>
+                      )}
                       {engine?.toc.map((n, i) => {
                         const idx = engine.chapters.findIndex(
                           (c) => c.href === n.href.split("#")[0],
@@ -1779,11 +1992,13 @@ export function App() {
                             </span>
                             <span>{n.title}</span>
                             <small className="toc-page-count">
-                              {chapterCounts[idx]
-                                ? `${chapterCounts[idx]} ${chapterCounts[idx] === 1 ? "page" : "pages"}`
-                                : counting
-                                  ? "…"
-                                  : "Open to count"}
+                              {fixedPages
+                                ? `Page ${idx + 1}`
+                                : chapterCounts[idx]
+                                  ? `${chapterCounts[idx]} ${chapterCounts[idx] === 1 ? "page" : "pages"}`
+                                  : counting
+                                    ? "…"
+                                    : "Open to count"}
                             </small>
                             {idx === chapter && <i />}
                           </button>
@@ -1878,6 +2093,7 @@ export function App() {
                     </button>
                   )}
                   <button
+                    hidden={fixedPages}
                     className="icon-btn chapter-skip"
                     aria-label="Previous chapter"
                     onClick={() => navigate(chapter - 1)}
@@ -1906,6 +2122,7 @@ export function App() {
                     {engine?.chapters[chapter]?.title || "Opening chapter"}
                   </span>
                   <button
+                    hidden={fixedPages}
                     className="icon-btn chapter-skip"
                     aria-label="Next chapter"
                     onClick={() => navigate(chapter + 1)}
@@ -1930,8 +2147,10 @@ export function App() {
                 >
                   <Icon name="search" size={15} />
                   <input
-                    aria-label="Find in chapter"
-                    placeholder="Find in chapter"
+                    aria-label={fixedPages ? "Find in page" : "Find in chapter"}
+                    placeholder={
+                      fixedPages ? "Find in page" : "Find in chapter"
+                    }
                     value={find}
                     onChange={(e) => setFind(e.target.value)}
                   />
@@ -1941,6 +2160,7 @@ export function App() {
                 </form>
                 <button
                   className={`bookmark-action ${!!currentBookmark ? "saved" : ""}`}
+                  aria-label={currentBookmark ? "Bookmarked" : "Bookmark"}
                   onClick={safe(addBookmark)}
                   disabled={!engine || !pageInfo || chapterLoading}
                 >
@@ -1948,7 +2168,7 @@ export function App() {
                   <span>{!!currentBookmark ? "Bookmarked" : "Bookmark"}</span>
                 </button>
               </div>
-              <div className="paper-wrap">
+              <div className="paper-wrap" ref={paper}>
                 {chapterLoading ? (
                   <div className="reader-loading">
                     <span className="spinner" />
@@ -1959,7 +2179,11 @@ export function App() {
                     ref={frame}
                     title="Book chapter"
                     sandbox="allow-same-origin"
-                    srcDoc={createReadingDocument(rendered.html)}
+                    srcDoc={
+                      rendered.fixedPage
+                        ? createFixedReadingDocument(rendered.html)
+                        : createReadingDocument(rendered.html)
+                    }
                     onLoad={loaded}
                   />
                 ) : (
@@ -1967,7 +2191,9 @@ export function App() {
                     <Icon name="book" />
                     <p>
                       {error
-                        ? "Unable to open this chapter. Try another chapter or return to your library."
+                        ? fixedPages
+                          ? "Unable to open this page. Try another page or return to your library."
+                          : "Unable to open this chapter. Try another chapter or return to your library."
                         : "Opening your reading room…"}
                     </p>
                   </div>
@@ -1998,10 +2224,13 @@ export function App() {
                   className="page-button"
                   onClick={() => turnPage(-1)}
                   disabled={
-                    !pageInfo ||
                     chapterLoading ||
-                    (pageInfo.page === 1 &&
-                      (chapter === 0 || !engine?.chapters[chapter]?.linear))
+                    (fixedPages
+                      ? chapter === 0
+                      : !pageInfo ||
+                        (pageInfo.page === 1 &&
+                          (chapter === 0 ||
+                            !engine?.chapters[chapter]?.linear)))
                   }
                 >
                   <Icon name="prev" size={16} />
@@ -2009,15 +2238,20 @@ export function App() {
                 </button>
                 <div className="page-location">
                   <span className="page-count" aria-live="polite">
-                    {pageInfo
-                      ? `Page ${pageInfo.page} of ${pageInfo.pages}`
-                      : "Counting pages…"}
+                    {fixedPages && engine
+                      ? `Page ${chapter + 1} of ${engine.linearCount}`
+                      : pageInfo
+                        ? `Page ${pageInfo.page} of ${pageInfo.pages}`
+                        : "Counting pages…"}
                   </span>
                   <span className="chapter-location">
-                    {engine?.chapters[chapter]?.linear
-                      ? `Chapter ${chapter + 1} of ${engine.linearCount}`
-                      : "Supplementary content"}
-                    {chapterCounts.length > 0 &&
+                    {fixedPages
+                      ? `${engine ? formatNames[engine.format] : ""} · Original pages`
+                      : engine?.chapters[chapter]?.linear
+                        ? `Chapter ${chapter + 1} of ${engine.linearCount}`
+                        : "Supplementary content"}
+                    {!fixedPages &&
+                    chapterCounts.length > 0 &&
                     engine?.chapters[chapter]?.linear &&
                     chapterCounts
                       .slice(0, engine?.linearCount)
@@ -2028,13 +2262,25 @@ export function App() {
                   </span>
                   <input
                     type="range"
-                    aria-label="Page in chapter"
+                    aria-label={
+                      fixedPages ? "Page in document" : "Page in chapter"
+                    }
                     min="1"
-                    max={pageInfo?.pages || 1}
-                    value={pageInfo?.page || 1}
-                    disabled={!pageInfo || pageInfo.pages < 2}
+                    max={
+                      fixedPages
+                        ? engine?.linearCount || 1
+                        : pageInfo?.pages || 1
+                    }
+                    value={fixedPages ? chapter + 1 : pageInfo?.page || 1}
+                    disabled={
+                      fixedPages
+                        ? chapterLoading || (engine?.linearCount || 1) < 2
+                        : !pageInfo || pageInfo.pages < 2
+                    }
                     onChange={(e) =>
-                      paginator.current?.goToPage(Number(e.target.value))
+                      fixedPages
+                        ? navigate(Number(e.target.value) - 1)
+                        : paginator.current?.goToPage(Number(e.target.value))
                     }
                   />
                 </div>
@@ -2043,10 +2289,12 @@ export function App() {
                   onClick={() => turnPage(1)}
                   disabled={
                     !engine ||
-                    !pageInfo ||
                     chapterLoading ||
-                    (chapter >= engine.linearCount - 1 &&
-                      pageInfo.page === pageInfo.pages)
+                    (fixedPages
+                      ? chapter >= engine.linearCount - 1
+                      : !pageInfo ||
+                        (chapter >= engine.linearCount - 1 &&
+                          pageInfo.page === pageInfo.pages))
                   }
                 >
                   Next page
@@ -2108,7 +2356,7 @@ export function App() {
               </button>
             </div>
           </fieldset>
-          <fieldset className="reading-field">
+          <fieldset className="reading-field" hidden={fixedPages}>
             <legend>
               TEXT SIZE <span>{font}px</span>
             </legend>
@@ -2137,7 +2385,7 @@ export function App() {
               </button>
             </div>
           </fieldset>
-          <fieldset className="reading-field">
+          <fieldset className="reading-field" hidden={fixedPages}>
             <legend>TYPEFACE</legend>
             <div className="font-options">
               {(
@@ -2178,7 +2426,13 @@ export function App() {
               ))}
             </div>
           </fieldset>
-          <div className="reading-detail-controls">
+          {fixedPages && (
+            <p className="fine-print">
+              PDF and DjVu keep their original page layout and type size. Use
+              the zoom controls to enlarge the page.
+            </p>
+          )}
+          <div className="reading-detail-controls" hidden={fixedPages}>
             <label>
               Line spacing
               <select
@@ -2274,8 +2528,8 @@ export function App() {
           ) : (
             <>
               <p>
-                Bring an EPUB from Google Drive into your private library. Your
-                original file stays unchanged.
+                Bring a document from Google Drive into your private library.
+                Your original file stays unchanged.
               </p>
               <label className="field-label" htmlFor="drive-link">
                 GOOGLE DRIVE FILE LINK
@@ -2313,7 +2567,7 @@ export function App() {
         <Modal title="Storage & backup" onClose={closeModal}>
           <p>
             Your books and notes are stored in this browser. A backup includes
-            original EPUBs, reading positions, annotations and OCR notes.
+            original files, reading positions, annotations and OCR notes.
           </p>
           <p role="status">
             {storage?.persistent
@@ -2430,11 +2684,13 @@ export function App() {
                 onChange={() => setPrintScope("chapter")}
               />
               <span>
-                <strong>Current chapter</strong>
+                <strong>
+                  {fixedPages ? "Current page" : "Current chapter"}
+                </strong>
                 <small>{engine?.chapters[chapter]?.title}</small>
               </span>
             </label>
-            <label>
+            <label hidden={fixedPages}>
               <input
                 type="radio"
                 name="scope"
@@ -2450,6 +2706,9 @@ export function App() {
             </label>
           </div>
           <p className="fine-print">
+            {fixedPages
+              ? "DjVu printing creates a raster copy of the current page. "
+              : ""}
             Print pagination may differ from the reading view. Large image-heavy
             books are best printed chapter by chapter. Highlights and OCR text
             layers are not included in this version.
@@ -2574,6 +2833,8 @@ export function App() {
 }
 
 function bookProgress(book: Book) {
+  if (book.format === "pdf" || book.format === "djvu")
+    return Math.round((100 * book.chapter) / Math.max(1, book.chapterCount));
   if (!book.page || !book.pageCount || book.chapter >= book.chapterCount)
     return 0;
   const counts = book.pagination?.counts.slice(0, book.chapterCount);

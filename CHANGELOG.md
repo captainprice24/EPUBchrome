@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 — More formats and fullscreen
+
+- Added PDF reading with PDF.js: original page counts, local range access, embedded text selection/highlights, outlines/internal links, zoom and byte-for-byte original downloads.
+- Added DjVu with a local Rust/WASM worker: original pages, IW44/JB2 decoding, embedded text for smaller files, on-demand range reads for larger files, OCR access and zoom.
+- Added DRM-free MOBI/PalmDOC/KF8 parsing in a disposable worker, with bounded preparation, metadata, images, sections and shared reader annotations.
+- Added standalone Markdown with headings, GFM tables/code and sanitized HTML in the existing reflow reader.
+- Added real fullscreen and a distraction-free fallback, keyboard/visible exit controls, and layout anchors that preserve the passage when entering/exiting fullscreen.
+- Extended backups to version 2 for mixed-format originals, while retaining version 1 restore support. Extended configured Drive imports to supported formats.
+- Bundled local PDF workers/fonts/CMaps/ICC/decoder assets and DjVu WASM with license notices; added reproducible fixes for known edge cases in the pinned MOBI parser.
+- Added format, fullscreen, large-range-path and Pages-subpath regression coverage.
+
 ## 0.3.0 — Rendering and data safety
 
 - Fixed XHTML self-closing elements and linked publisher styles; added scoped local CSS imports and Publisher typography.

@@ -5,9 +5,9 @@ export default defineConfig({
   manifest: ({ mode }) => {
     const clientId = loadEnv(mode, process.cwd(), "WXT_").WXT_GOOGLE_CLIENT_ID;
     return {
-      name: "Folio — EPUB reading room",
+      name: "Folio — Private document reader",
       description:
-        "A private reading room for EPUBs. Chapters, bookmarks, highlights, local OCR and PDF printing.",
+        "Read EPUB, PDF, DjVu, MOBI and Markdown privately. Bookmarks, highlights, fullscreen, local OCR and PDF printing.",
       version,
       action: { default_title: "Open Folio" },
       permissions: [

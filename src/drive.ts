@@ -1,3 +1,4 @@
+import { detectFormat, documentSizeLimit, mimeTypes } from "./document-types";
 export async function driveImport(
   input: string,
   onProgress: (s: string) => void,
@@ -39,10 +40,12 @@ export async function driveImport(
     size?: string;
     mimeType: string;
   };
-  if (!meta.name.toLowerCase().endsWith(".epub"))
-    throw Error("Choose an EPUB file from Drive.");
-  if (Number(meta.size) > 1024 ** 3)
-    throw Error("This version supports EPUB files up to 1 GB.");
+  const format = detectFormat(meta.name, meta.mimeType);
+  const limit = documentSizeLimit(format);
+  if (Number(meta.size) > limit)
+    throw Error(
+      `This document exceeds the ${limit / 1024 ** 2} MB limit for its format.`,
+    );
   const r = await fetch(base + "?alt=media&supportsAllDrives=true", {
     headers,
     signal,
@@ -60,8 +63,8 @@ export async function driveImport(
       const part = await reader.read();
       if (part.done) break;
       received += part.value.byteLength;
-      if (received > 1024 ** 3)
-        throw Error("The file exceeds the 1 GB safety limit.");
+      if (received > limit)
+        throw Error("This file exceeds the safety limit for its format.");
       await writer.write(part.value);
       onProgress(
         `Downloading… ${Math.round(received / 1024 / 1024)} MB${meta.size ? " / " + Math.ceil(Number(meta.size) / 1024 / 1024) + " MB" : ""}`,
@@ -70,7 +73,7 @@ export async function driveImport(
     await writer.close();
     const f = await h.getFile();
     return {
-      file: new File([f], meta.name, { type: "application/epub+zip" }),
+      file: new File([f], meta.name, { type: mimeTypes[format] }),
       cleanup: () => root.removeEntry(name),
     };
   } catch (e) {

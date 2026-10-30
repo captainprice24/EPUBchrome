@@ -8,6 +8,7 @@ import {
 } from "@zip.js/zip.js";
 import DOMPurify from "dompurify";
 import { rewriteCss } from "./publisher-css";
+import type { DocumentFormat } from "./document-types";
 configure({ useWebWorkers: false });
 export interface Chapter {
   href: string;
@@ -23,6 +24,7 @@ export interface Rendered {
   html: string;
   images: { src: string; name: string; path?: string }[];
   warnings: string[];
+  fixedPage?: { width: number; height: number };
 }
 const MAX_ENTRY = 64 * 1024 * 1024;
 export function resolvePath(base: string, ref: string): string {
@@ -50,6 +52,9 @@ function xml(text: string) {
 const elements = (node: Document | Element, name: string) =>
   Array.from(node.getElementsByTagNameNS("*", name));
 export class Epub {
+  format: DocumentFormat = "epub";
+  fixedPages = false;
+  prepared?: Blob;
   private reader: ZipReader<Blob>;
   private entries = new Map<string, Entry>();
   private urls = new Map<string, string>();
