@@ -13,3 +13,5 @@ PDF reading uses Mozilla PDF.js (`pdfjs-dist`, Apache-2.0), including its packag
 MOBI/KF8 parsing uses `@lingo-reader/mobi-parser` and `@lingo-reader/shared` (MIT), with `fflate`, `sax`, `events` and `path-browserify` under their included licenses. The parser derives from John Factotum's MIT-licensed Foliate.js MOBI implementation; that license is retained in `third-party/foliate-mobi-LICENSE` and copied into the build. `scripts/patch-mobi.mjs` records the narrow local fixes to the pinned parser. Markdown uses `marked` (MIT).
 
 The original DjVu test fixture was generated with DjVuLibre as a development tool; that tool and its libraries are not included in the application. See `tests/fixtures/README.md`.
+
+Library first-page previews of reflowing documents use `html2canvas` (MIT), with `css-line-break`, `text-segmentation`, `utrie` and `base64-arraybuffer` under their included MIT licenses. Rendering happens locally with the scriptless reader's sanitized content and packaged assets. No document is sent to a screenshot or conversion service.

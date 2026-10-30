@@ -6,7 +6,7 @@
 
 A private, **EPUB-first book library** for Chrome. Read EPUB and MOBI books, keep **PDF, DjVu and Markdown** in a separate Documents collection, and use fullscreen reading, bookmarks, highlights and local OCR throughout.
 
-![Version 0.4.3](https://img.shields.io/badge/version-0.4.3-385546)
+![Version 0.4.4](https://img.shields.io/badge/version-0.4.4-385546)
 ![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest_V3-70865b)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 [![Build and test](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml)
@@ -38,7 +38,7 @@ Turn pages horizontally or read vertically, see the page count in each chapter, 
 
 </details>
 
-Books and Documents have separate shelves, counts, search and sorting. Existing items are categorized automatically without changing their original files or notes. Use **Move to Books** or **Move to Documents** on a card to organize items yourself; category choices are included in backups.
+Books and Documents have separate shelves, counts, search and sorting. Cards show an embedded cover or a locally generated first-page preview. Existing items without images fill in gradually while their collection is open. Existing items are categorized automatically without changing their original files or notes. Use **Move to Books** or **Move to Documents** on a card to organize items yourself; category choices are included in backups.
 
 In fullscreen, use **Bookmark** to save the current page, select text and choose **Highlight**, or open **Notes** to revisit bookmarks and highlights. **Contents**, **Settings** and **Exit fullscreen** remain available.
 
@@ -46,7 +46,7 @@ In fullscreen, use **Bookmark** to save the current page, select text and choose
 
 | Feature | Available in v0.4 |
 | --- | --- |
-| Book library and Documents | Separate shelves and counts, manual category moves, file picker, drag and drop, search, sorting and removal |
+| Book library and Documents | Separate shelves and counts, embedded covers or first-page previews, manual category moves, file picker, drag and drop, search, sorting and removal |
 | Chapter navigation | EPUB 3 contents, nested EPUB 2 NCX, spine order and publisher page lists when supplied |
 | Pages and reading tools | Per-chapter layout counts for reflowing books; original page counts for PDF/DjVu, page slider, saved place and text search |
 | Fullscreen | Toolbar button or **F**; Contents, Bookmark, Notes and Settings stay available; **Esc**/visible exit; preserved passage |
@@ -93,7 +93,7 @@ The app itself does not require a server, a Google account or an OCR subscriptio
 npm run package
 ```
 
-This creates `.output/folio-0.4.3-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
+This creates `.output/folio-0.4.4-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
 
 ### Develop and test
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4 — Real document previews and simpler library copy
+
+- Kept “Your reading room” on one line; moved the full browser-storage sentence to a single-line library footer and restored “Local first. Private by default.” in the sidebar.
+- Used valid embedded covers or locally rendered first pages for library cards, including PDF, DjVu, EPUB, MOBI and Markdown. Images retain their full aspect ratio instead of cropping page content.
+- Cached bounded PNG previews, filled missing previews in existing library items one at a time and preserved originals, reading positions, notes and Blob-storage compatibility.
+- Limited optional preview generation by time, image/chapter size and canvas dimensions; unsuccessful previews keep the readable title card and never block document reading.
+
 ## 0.4.3 — Recoverable EPUB imports and independent page themes
 
 - Opened remaining declared EPUB content when a reading-order ID is absent from the manifest, with a persistent explanation of missing entries. Books with no usable reading order and unsafe external spine paths remain rejected.

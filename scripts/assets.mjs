@@ -33,6 +33,11 @@ for (const name of [
   "fflate",
   "events",
   "path-browserify",
+  "html2canvas",
+  "css-line-break",
+  "text-segmentation",
+  "utrie",
+  "base64-arraybuffer",
 ])
   await copyFile(
     `node_modules/${name}/LICENSE`,

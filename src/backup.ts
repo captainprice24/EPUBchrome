@@ -292,6 +292,7 @@ export async function restoreLibrary(file: File) {
       if (item.contentHash !== hash)
         throw Error(`Book checksum does not match: ${title}`);
       const metadata = {
+        ...(item.previewVersion === 1 ? { previewVersion: 1 } : {}),
         ...(item.collection === "books" || item.collection === "documents"
           ? { collection: item.collection as LibraryCollection }
           : {}),

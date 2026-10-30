@@ -45,6 +45,7 @@ import {
 import { migrateLocators } from "./migrate-locators";
 import { contentHash } from "./content-hash";
 import { persistBooks } from "./binary-storage";
+import { createDocumentPreview, PREVIEW_VERSION } from "./thumbnails";
 import { backupLibrary, restoreLibrary } from "./backup";
 import { storageStatus } from "./storage";
 import {
@@ -150,11 +151,11 @@ function Cover({
   const theme = book.title.length % 4;
   return (
     <div
-      className={`cover cover-${theme} ${large ? "large" : ""}`}
+      className={`cover cover-${theme} ${url ? "has-image" : ""} ${large ? "large" : ""}`}
       aria-hidden="true"
     >
       {url ? (
-        <img src={url} alt="" />
+        <img src={url} alt="" onError={() => setUrl("")} />
       ) : (
         <>
           <span className="cover-kicker">
@@ -314,6 +315,7 @@ export function App() {
   const resumeLocator = useRef<TextLocator | undefined>(undefined);
   const restoreInput = useRef<HTMLInputElement>(null);
   const restoreQueue = useRef<Promise<void>>(Promise.resolve());
+  const previewAttempts = useRef(new Set<string>());
   const [ocrNoteId, setOcrNoteId] = useState<string | null>(null);
   const [pageZoom, setPageZoom] = useState(1);
   const fullscreen = useReaderFullscreen(!!selectedId);
@@ -410,6 +412,55 @@ export function App() {
     void refresh().catch((e) => setError(message(e)));
   }, [refresh]);
   useEffect(() => {
+    if (selectedId || busy || (filter !== "books" && filter !== "documents"))
+      return;
+    const book = books.find(
+      (item) =>
+        bookCollection(item) === filter &&
+        !item.cover &&
+        item.previewVersion !== PREVIEW_VERSION &&
+        !previewAttempts.current.has(item.id),
+    );
+    if (!book) return;
+    previewAttempts.current.add(book.id);
+    const controller = new AbortController();
+    let finished = false;
+    void (async () => {
+      let parser: DocumentEngine | undefined;
+      try {
+        parser = await openDocument(
+          book.blob,
+          book.format || "epub",
+          book.fileName || book.title,
+          book.preparedVersion === 1 ? book.prepared : undefined,
+        );
+        controller.signal.throwIfAborted();
+        const cover = await createDocumentPreview(parser, controller.signal);
+        controller.signal.throwIfAborted();
+        await persistBooks([{ ...book, cover }], () =>
+          db.transaction("rw", db.books, async () => {
+            const current = await db.books.get(book.id);
+            if (current && !current.cover)
+              await db.books.update(book.id, {
+                cover,
+                previewVersion: PREVIEW_VERSION,
+              });
+          }),
+        );
+      } catch {
+        // Optional previews never overwrite originals, saved places or notes.
+      } finally {
+        await parser?.close().catch(() => {});
+        finished = true;
+      }
+      if (!controller.signal.aborted) await refresh();
+    })().catch(() => {});
+    return () => {
+      controller.abort();
+      if (!finished) previewAttempts.current.delete(book.id);
+    };
+  }, [books, selectedId, busy, filter, refresh]);
+  useEffect(() => {
     if (filter === "books" || filter === "documents")
       localStorage.setItem("folio-collection", filter);
   }, [filter]);
@@ -495,13 +546,7 @@ export function App() {
         throw Error(
           "There is not enough browser storage for this book. Remove a book or free up storage and try again.",
         );
-      let cover: Blob | undefined;
-      if (parser.coverPath)
-        try {
-          cover = await parser.blob(parser.coverPath);
-        } catch {
-          /* cover is optional */
-        }
+      const cover = await createDocumentPreview(parser);
       const book: Book = {
         id: crypto.randomUUID(),
         format,
@@ -516,6 +561,7 @@ export function App() {
         chapter: parser.initialChapter || 0,
         blob: file,
         cover,
+        previewVersion: PREVIEW_VERSION,
         chapterCount: parser.linearCount,
         contentHash: hash,
         rendererVersion: RENDERER_VERSION,
@@ -1520,11 +1566,7 @@ export function App() {
                 <Icon name="leaf" />
               </div>
               <strong>A library that’s yours.</strong>
-              <p>
-                Your books, documents and notes stay
-                <br />
-                in this browser.
-              </p>
+              <p>Local first. Private by default.</p>
               <span className="local-badge">
                 <i /> LOCAL FIRST
               </span>
@@ -1898,7 +1940,9 @@ export function App() {
                   Export notes
                 </button>
               }
-              <span>Your books first. Your documents alongside.</span>
+              <span className="privacy-statement">
+                Your books, documents and notes stay in this browser.
+              </span>
             </footer>
           </main>
         </>

@@ -30,7 +30,7 @@ A separate three-test browser suite exercises the production web build at `/EPUB
 
 Four additional browser scenarios use an 80-paragraph EPUB chapter. They verify multi-page horizontal layout and counts, page turns without chapter jumps, exact page restoration after reopening, background chapter counts and book totals, reflow with a preserved passage, persistent font/theme/direction settings, multiple page bookmarks in one chapter, keyboard crossing of chapter boundaries, swipe turns, resize-driven repagination and narrow-screen layout. The original annotation/OCR/print tests remain in place and use the new page viewport where relevant.
 
-The full suite now contains 40 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
+The full suite now contains 43 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
 
 ## Audit regressions
 
@@ -59,3 +59,7 @@ Three additional reader scenarios inject the reported “Error preparing Blob/Fi
 ## EPUB recovery and independent page themes (v0.4.3)
 
 Four additional scenarios use original project fixtures to verify a missing cover ID with remaining readable chapters, filename title fallback, an empty initial navigation document, persisted bookmarks and unchanged originals in backups; rejection of an entirely unusable spine and external spine URLs; and page-theme isolation from reader/library colours under both light and dark system appearances. Pages category coverage also checks that selecting Sepia changes the document canvas without recolouring the library. This does not certify recovery of every malformed EPUB or invent content absent from its archive.
+
+## Library previews (v0.4.4)
+
+Three additional browser scenarios verify first-page PDF/DjVu image pixels rather than the saved page, bounded dimensions and uncropped aspect ratios; embedded-cover priority plus EPUB/MOBI/Markdown text-page previews without external requests; and background generation for an older item under injected Blob-storage rejection, with its bookmark, page and downloaded original bytes preserved. The native-card scenario also checks privacy copy and overflow at desktop, tablet and 390/320px widths. Previews are optional derivatives and not a document-fidelity certification.

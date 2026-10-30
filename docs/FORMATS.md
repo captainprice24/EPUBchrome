@@ -38,6 +38,14 @@ Folio is an EPUB-first book library. EPUB and MOBI appear under **Books** by def
 
 Use the toolbar button or **F**. **Esc** and **Exit fullscreen** leave the mode. Contents, **Bookmark**, **Notes**, Settings, page controls and fixed-page zoom remain available. Select text and choose **Highlight** to save a passage; **Notes** opens the saved-bookmark and highlight tabs without leaving fullscreen. Browsers without the Fullscreen API use distraction-free reading within the current tab; they cannot hide browser/OS chrome. Entering/exiting fullscreen preserves the saved text passage instead of replacing it with the start of a newly laid-out page.
 
+## Library previews
+
+Cards prefer an embedded cover. If it cannot be used or is absent, Folio generates a PNG of the first physical PDF/DjVu page or first readable page of a reflowing book/Markdown document. Original page colours and the whole image aspect ratio are retained. Previews use local workers and a scriptless reader; no document, screenshot or text is uploaded to a conversion service.
+
+Previews are cached with the library and included in backups. Existing items missing a preview are processed one at a time while their Books/Documents collection is open, without changing originals, saved places or notes. The optional work is canceled when you leave that collection or begin reading.
+
+Images are bounded to **384 × 544** pixels and generation has a **10-second** budget. Oversized cover resources (above 8 MB), reflow chapters above 2 MB or unusual publisher layouts can prevent a preview; the title card remains available and the document can still be read. The source document retains its full reading resolution and original bytes.
+
 ## Browser storage compatibility
 
 If the browser rejects saving Blob/File objects, Folio retries with local typed byte chunks. Original bytes and MIME types are preserved, with the same reading, note and backup behavior. Existing native-Blob library records remain readable; no library reset or document conversion is needed. The compatibility representation requires Folio 0.4.2 or newer, so reload older open Folio tabs before using those items.

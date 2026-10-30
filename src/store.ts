@@ -18,6 +18,7 @@ export interface Book {
   chapter: number;
   blob: Blob;
   cover?: Blob;
+  previewVersion?: number;
   chapterCount: number;
   pagination?: { key: string; counts: number[] };
   position?: number;

@@ -87,10 +87,11 @@ a {
   margin-left: -10px;
 }
 .sidebar-caption {
-  font-size: 12px;
-  letter-spacing: 1.8px;
+  font-size: 11px;
+  white-space: nowrap;
+  letter-spacing: 1.2px;
   color: var(--text-secondary);
-  margin: 14px 12px 45px;
+  margin: 14px 8px 45px;
 }
 .library-sidebar nav {
   display: flex;
@@ -135,7 +136,8 @@ a {
   font-weight: normal;
 }
 .sidebar-bottom p {
-  font-size: 12px;
+  font-size: 11px;
+  white-space: nowrap;
   line-height: 1.9;
   color: var(--text-secondary);
 }
@@ -2383,4 +2385,29 @@ a {
   max-height: 100px;
   overflow: auto;
   overflow-wrap: anywhere;
+}
+
+/* Keep privacy copy readable without widening the book navigation. */
+.library-footer {
+  flex-wrap: wrap;
+  gap: 18px 24px;
+  align-items: center;
+}
+.library-footer .privacy-statement {
+  display: block;
+  white-space: nowrap;
+}
+.cover.has-image {
+  background: #fffdf8;
+  border: 1px solid #dce2d3;
+  padding: 0;
+}
+.cover.has-image img {
+  object-fit: contain;
+}
+@media (max-width: 760px) {
+  .library-footer .privacy-statement {
+    flex-basis: 100%;
+    font-size: 11px;
+  }
 }
