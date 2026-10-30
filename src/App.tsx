@@ -3,6 +3,7 @@ import {
   useId,
   useMemo,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -139,7 +140,7 @@ function Cover({
   large?: boolean;
 }) {
   const [url, setUrl] = useState("");
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!book.cover) {
       setUrl("");
       return;
