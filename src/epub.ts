@@ -1,6 +1,5 @@
 import {
   ZipReader,
-  BlobReader,
   BlobWriter,
   TextWriter,
   configure,
@@ -9,6 +8,7 @@ import {
 import DOMPurify from "dompurify";
 import { rewriteCss } from "./publisher-css";
 import type { DocumentFormat } from "./document-types";
+import { LocalFileReader } from "./file-reading";
 configure({ useWebWorkers: false });
 export interface Chapter {
   href: string;
@@ -75,7 +75,7 @@ export class Epub {
   constructor(blob: Blob) {
     if (blob.size > 1024 ** 3)
       throw Error("This version supports EPUB files up to 1 GB.");
-    this.reader = new ZipReader(new BlobReader(blob));
+    this.reader = new ZipReader(new LocalFileReader(blob));
   }
   async open() {
     let total = 0,

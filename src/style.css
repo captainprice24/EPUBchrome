@@ -2407,4 +2407,11 @@ a {
     flex-basis: 100%;
     font-size: 11px;
   }
+  /* Safari zooms focused form controls below 16px, which can leave the view
+     enlarged after dismissing the keyboard. Preserve manual pinch zoom. */
+  .app input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+  .app select,
+  .app textarea {
+    font-size: 16px;
+  }
 }

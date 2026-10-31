@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.6 — Recoverable EPUB file reads
+
+- Replaced sliced-Blob ZIP streams with bounded byte reads for EPUB extraction and backups, including direct reads of locally stored byte chunks and a FileReader fallback for unavailable native Blob reads.
+- Allowed a SHA-256-matching original to refresh an existing library item’s file and derived reading copy, retaining its ID, notes, category and reading position.
+- Added a persistent reading-error explanation, a “Choose original file” action and an unavailable-page status instead of indefinite “Counting pages…” after a read failure.
+- Used 16 px mobile form text to prevent Safari’s focus-triggered zoom while retaining manual pinch zoom.
+- Added controlled 41 MiB ZIP read-failure, byte-storage and file-reattachment regressions; this does not verify the unavailable reported publication or every iOS version.
+
 ## 0.4.5 — Recover file-storage failures while reading
 
 - Extended Blob/File storage recovery to reading positions, chapter changes, pagination counts, last-read dates, category moves and older-library fingerprints.

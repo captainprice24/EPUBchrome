@@ -253,6 +253,7 @@ export function App() {
     [engine, setEngine] = useState<DocumentEngine | null>(null),
     [rendered, setRendered] = useState<Rendered | null>(null),
     [chapterLoading, setChapterLoading] = useState(false),
+    [readingError, setReadingError] = useState(""),
     [tab, setTab] = useState("contents"),
     [sidebar, setSidebar] = useState(() => window.innerWidth > 760),
     [selection, setSelection] =
@@ -529,12 +530,35 @@ export function App() {
         }
       }
       if (existing) {
+        // The same original can repair a missing browser-backed file. Validate
+        // the fresh source, then replace only its binary fields transactionally.
+        // Keep the current record's ID, annotations, category and reading state.
+        parser = await openDocument(
+          file,
+          existing.format || "epub",
+          existing.fileName || file.name,
+        );
+        const repaired = {
+          blob: file,
+          prepared: parser.prepared,
+          preparedVersion: parser.prepared ? 1 : undefined,
+        };
+        await persistBooks([{ ...existing, ...repaired }], () =>
+          db.transaction("rw", db.books, async () => {
+            const current = await db.books.get(existing!.id);
+            if (!current || current.contentHash !== hash)
+              throw Error(
+                "This library entry changed. Return to the library and try again.",
+              );
+            await db.books.update(current.id, repaired);
+          }),
+        );
         await refresh();
         setFilter(bookCollection(existing));
         setChapter(existing.chapter);
         setSelectedId(existing.id);
         setNotice(
-          "This book is already in your library. Your saved place and notes are preserved.",
+          "This book is already in your library. Its local file copy was refreshed; your saved place and notes are preserved.",
         );
         return;
       }
@@ -615,6 +639,7 @@ export function App() {
     }
   };
   useEffect(() => {
+    setReadingError("");
     if (!selectedId) {
       setEngine(null);
       setRendered(null);
@@ -661,6 +686,7 @@ export function App() {
       await updateBook(book.id, { lastRead: Date.now() });
     })().catch((e) => {
       if (!canceled) {
+        setReadingError(message(e));
         setError(message(e));
         setBusy("");
       }
@@ -689,6 +715,7 @@ export function App() {
     paginator.current = null;
     setPageInfo(null);
     setChapterLoading(true);
+    setReadingError("");
     setSelection(null);
     setRendered(null);
     engine.releaseResources();
@@ -711,7 +738,10 @@ export function App() {
         }
       })
       .catch((e) => {
-        if (!cancel) setError(message(e));
+        if (!cancel) {
+          setReadingError(message(e));
+          setError(message(e));
+        }
       })
       .finally(() => {
         if (!cancel) setChapterLoading(false);
@@ -1846,6 +1876,7 @@ export function App() {
                         ? "Bring your next book along."
                         : "Keep your reference reading here."}
                     </p>
+
                     <small>
                       {filter === "books"
                         ? "Import a book"
@@ -2461,12 +2492,24 @@ export function App() {
                   <div className="empty">
                     <Icon name="book" />
                     <p>
-                      {error
+                      {readingError
                         ? fixedPages
                           ? "Unable to open this page. Try another page or return to your library."
                           : "Unable to open this chapter. Try another chapter or return to your library."
                         : "Opening your reading room…"}
                     </p>
+                    {readingError && <p>{readingError}</p>}
+                    {readingError && (
+                      <button
+                        className="button secondary"
+                        onClick={() => {
+                          setSelectedId(null);
+                          input.current?.click();
+                        }}
+                      >
+                        Choose original file
+                      </button>
+                    )}
                   </div>
                 )}
                 {selection && (
@@ -2509,11 +2552,15 @@ export function App() {
                 </button>
                 <div className="page-location">
                   <span className="page-count" aria-live="polite">
-                    {fixedPages && engine
-                      ? `Page ${chapter + 1} of ${engine.linearCount}`
-                      : pageInfo
-                        ? `Page ${pageInfo.page} of ${pageInfo.pages}`
-                        : "Counting pages…"}
+                    {readingError && !rendered && !chapterLoading
+                      ? fixedPages
+                        ? "Page unavailable"
+                        : "Chapter unavailable"
+                      : fixedPages && engine
+                        ? `Page ${chapter + 1} of ${engine.linearCount}`
+                        : pageInfo
+                          ? `Page ${pageInfo.page} of ${pageInfo.pages}`
+                          : "Counting pages…"}
                   </span>
                   <span className="chapter-location">
                     {fixedPages

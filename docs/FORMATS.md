@@ -52,6 +52,12 @@ If the browser rejects saving Blob/File objects, Folio retries with local typed 
 
 This fallback has a **64 MB per-item budget**, including the original, cover and derived reading copy. It is an input/memory guard, not a performance guarantee. The normal Blob path retains the format limits above. For larger items rejected by compatibility storage, try a regular browsing tab or the Chrome extension. A private browsing library can disappear when the private session ends; use a regular tab and backups for durable storage. A failure to save does not upload or alter the original file.
 
+## Unavailable local files
+
+EPUB extraction and backup use bounded range reads rather than native sliced-Blob streams. Byte-backed library files are read directly from their stored chunks; native files use `arrayBuffer()` with a FileReader fallback for `NotFoundError`/`NotReadableError`. This keeps the normal large-file range path and ZIP checksum checks.
+
+If the browser cannot read a saved source through either API, the reader keeps an explanation and offers **Choose original file**. You can also import the same original from the library. When its SHA-256 matches an existing item, Folio validates the fresh source and replaces only its original/derived binary fields in an atomic transaction. The current item ID, reading position, collection, covers and annotations remain. An unrelated file is never matched by filename or title, and existing notes are not deleted. There is no need to upload the original to a server.
+
 ## Backups and originals
 
 Folio 0.4 writes `.folio` **version 2** backups containing original files, declared formats, names, positions, annotations, OCR and covers. Derived reading caches are omitted and rebuilt on restore. It also restores **version 1** EPUB-only backups. Older Folio builds cannot read version 2 archives; update the destination before restoring.

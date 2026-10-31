@@ -30,7 +30,7 @@ A separate three-test browser suite exercises the production web build at `/EPUB
 
 Four additional browser scenarios use an 80-paragraph EPUB chapter. They verify multi-page horizontal layout and counts, page turns without chapter jumps, exact page restoration after reopening, background chapter counts and book totals, reflow with a preserved passage, persistent font/theme/direction settings, multiple page bookmarks in one chapter, keyboard crossing of chapter boundaries, swipe turns, resize-driven repagination and narrow-screen layout. The original annotation/OCR/print tests remain in place and use the new page viewport where relevant.
 
-The full suite now contains 45 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
+The full suite now contains 48 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
 
 ## Audit regressions
 
@@ -67,3 +67,9 @@ Three additional browser scenarios verify first-page PDF/DjVu image pixels rathe
 ## Storage failures after import (v0.4.5)
 
 Two additional reader scenarios first save a covered EPUB through normal native-Blob storage, then inject Blob rejection either during chapter navigation or while reopening a record that needs legacy annotation migration. Both check readable chapters, saved position after reload, both bookmarks, byte-backed original/cover persistence, unchanged original bytes in a backup and no error alert. Recovery retries the complete transaction; existing native-Blob values are converted with Dexie’s transaction keep-alive support only after a Blob-specific failure. This exercises a later failure that import-only injection did not cover; it does not reproduce every Safari version or guarantee storage persistence in private browsing.
+
+## Unavailable file reads (v0.4.6)
+
+Three scenarios use an original EPUB padded with an unused stored ZIP entry to around 41 MiB. The first injects the reported NotFoundError into sliced Blob streams and arrayBuffer reads after the first chapter opens; chapter navigation, reopening, a bookmark and byte-identical backup succeed via FileReader. It failed on the previous production build before the reader change. The other scenarios mark a saved source as unavailable to all Blob read APIs: an existing byte-backed item still reads directly from its chunks, while a native-Blob item displays persistent recovery guidance and can be repaired by reselecting the matching original. Both retain the item ID, bookmark, saved chapter and exact backup bytes. The native case also checks 16 px mobile search text and no horizontal overflow at 346 px.
+
+This reproduces specific read failures in Chromium. It does not reproduce a particular physical iPhone or certify complex 41 MiB publications; the reported book could not be supplied because of the attachment limit. Mobile form sizing prevents the usual Safari focus zoom without disabling manual zoom, but physical-device confirmation remains useful.

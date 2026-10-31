@@ -15,6 +15,26 @@ interface StoredBinary {
 const stored = new WeakMap<Blob, StoredBinary>();
 let compatibilityRequired = false;
 
+// Read hydrated byte storage without depending on WebKit's reconstructed Blob
+// backing file. Return a copy so ZIP decoders cannot detach persisted chunks.
+export function storedBinaryRange(blob: Blob, start: number, end: number) {
+  const value = stored.get(blob);
+  if (!value) return;
+  const result = new Uint8Array(end - start);
+  let offset = 0;
+  for (const chunk of value.chunks) {
+    const next = offset + chunk.byteLength;
+    if (next > start && offset < end) {
+      const from = Math.max(start, offset),
+        to = Math.min(end, next);
+      result.set(new Uint8Array(chunk, from - offset, to - from), from - start);
+    }
+    offset = next;
+    if (offset >= end) break;
+  }
+  return result;
+}
+
 export function hydrateBook(book: Book): Book {
   const result = { ...book };
   for (const field of fields) {

@@ -2,7 +2,6 @@ import {
   ZipWriter,
   ZipReader,
   BlobWriter,
-  BlobReader,
   TextReader,
   TextWriter,
   configure,
@@ -18,6 +17,7 @@ import {
 import { contentHash } from "./content-hash";
 import { storageStatus } from "./storage";
 import { persistBooks } from "./binary-storage";
+import { LocalFileReader } from "./file-reading";
 import type { TextLocator } from "./locators";
 import { openDocument } from "./documents";
 import { mimeTypes, type DocumentFormat } from "./document-types";
@@ -72,9 +72,9 @@ export async function backupLibrary(bookId?: string) {
       const file = `books/${i}.${book.format || "epub"}`,
         coverFile = cover ? `covers/${i}.bin` : undefined;
       // EPUB is already compressed. Storing it avoids a costly second compression.
-      await writer.add(file, new BlobReader(blob), { level: 0 });
+      await writer.add(file, new LocalFileReader(blob), { level: 0 });
       if (cover && coverFile)
-        await writer.add(coverFile, new BlobReader(cover), { level: 0 });
+        await writer.add(coverFile, new LocalFileReader(cover), { level: 0 });
       books.push({
         ...info,
         contentHash: hash,
@@ -195,7 +195,9 @@ export async function restoreLibrary(file: File) {
       "Restore files must be below 2 GB. Split very large libraries into smaller backups.",
     );
   const notesOnly = file.name.toLowerCase().endsWith(".json");
-  const reader = notesOnly ? undefined : new ZipReader(new BlobReader(file));
+  const reader = notesOnly
+    ? undefined
+    : new ZipReader(new LocalFileReader(file));
   try {
     const entries = new Map<
       string,
