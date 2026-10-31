@@ -136,11 +136,19 @@ function locator(value: unknown): TextLocator | undefined {
     quote = record(item.textQuote);
   if (item.version !== 1)
     throw Error("Unsupported annotation locator version.");
+  if (
+    item.textHash !== undefined &&
+    (typeof item.textHash !== "string" || !/^[a-f0-9]{64}$/.test(item.textHash))
+  )
+    throw Error("Invalid annotation text fingerprint.");
   return {
     version: 1,
     spineHref: string(item.spineHref),
     rendererVersion: number(item.rendererVersion),
     offsetHint: number(item.offsetHint),
+    ...(item.textHash !== undefined
+      ? { textHash: item.textHash as string }
+      : {}),
     textQuote: {
       exact: string(quote.exact, MAX_JSON),
       prefix: string(quote.prefix),

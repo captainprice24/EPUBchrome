@@ -23,8 +23,11 @@ for (const file of ["index.browser.mjs", "index.browser.js"]) {
   const path = `node_modules/@lingo-reader/mobi-parser/dist/${file}`;
   let source = await readFile(path, "utf8");
   for (const [before, after] of replacements) {
-    if (source.includes(before)) source = source.replace(before, after);
-    else if (!source.includes(after))
+    const beforeCount = source.split(before).length - 1;
+    const afterCount = source.split(after).length - 1;
+    if (beforeCount === 1 && afterCount === 0)
+      source = source.replace(before, after);
+    else if (beforeCount !== 0 || afterCount !== 1)
       throw Error(
         `Review the MOBI parser patch before changing its pinned dependency: ${file}`,
       );

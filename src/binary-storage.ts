@@ -1,5 +1,6 @@
 import Dexie from "dexie";
 import type { Book } from "./store";
+import { readBlobPart } from "./blob-io";
 
 const fields = ["blob", "cover", "prepared"] as const;
 const MAX_COMPATIBILITY_BYTES = 64 * 1024 ** 2;
@@ -93,7 +94,7 @@ export function installBinaryStorage(db: Dexie) {
               // A legacy record can still contain native Blobs. Convert the
               // exact values being written, including Dexie's freshly read
               // copies. waitFor keeps the transaction alive while reading bytes;
-              // concurrent saves cannot overwrite positions or notes meanwhile.
+              // this conversion and its metadata update stay atomic.
               return Dexie.waitFor(
                 prepareCompatibilityStorage(request.values),
               ).then(write);
@@ -134,7 +135,10 @@ async function prepareCompatibilityStorage(books: readonly Book[]) {
       const chunks: ArrayBuffer[] = [];
       for (let offset = 0; offset < blob.size; offset += CHUNK_BYTES)
         chunks.push(
-          await blob.slice(offset, offset + CHUNK_BYTES).arrayBuffer(),
+          await readBlobPart(
+            blob.slice(offset, offset + CHUNK_BYTES),
+            Math.min(CHUNK_BYTES, blob.size - offset),
+          ),
         );
       stored.set(blob, {
         folioBinary: 1,

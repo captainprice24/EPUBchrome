@@ -1,4 +1,5 @@
 import * as css from "css-tree";
+import { reportIssue, type RenderIssue } from "./render-issues";
 
 // A parser, rather than URL regexes, handles escaped URLs and nested at-rules.
 // The iframe CSP remains the final network boundary.
@@ -11,6 +12,7 @@ export async function rewriteCss(
   warnings: string[],
   budget = { sheets: 0, bytes: 0, seen: new Set<string>() },
   depth = 0,
+  issues?: RenderIssue[],
 ): Promise<string> {
   budget.bytes += source.length;
   if (++budget.sheets > 32 || budget.bytes > 2 * 1024 * 1024 || depth > 6)
@@ -76,6 +78,16 @@ export async function rewriteCss(
           : undefined;
       if (!first || (first.type !== "Url" && first.type !== "String"))
         throw Error("Invalid stylesheet import.");
+      if (/^(?:https?:)?\/\//i.test(first.value)) {
+        reportIssue(
+          warnings,
+          issues,
+          "info",
+          "Online publisher styles were blocked; local formatting is used.",
+        );
+        list.remove(item);
+        continue;
+      }
       const path = resolve(base, first.value);
       if (!budget.seen.has(path)) {
         budget.seen.add(path);
@@ -96,6 +108,7 @@ export async function rewriteCss(
             warnings,
             budget,
             depth + 1,
+            issues,
           );
           if (rest) replacement = `@media ${rest}{${replacement}}`;
         } finally {
@@ -103,7 +116,10 @@ export async function rewriteCss(
         }
       }
     } catch {
-      warnings.push(
+      reportIssue(
+        warnings,
+        issues,
+        "degraded",
         "A publisher stylesheet import could not be loaded safely.",
       );
     }
@@ -120,7 +136,12 @@ export async function rewriteCss(
       node.value = await resource(resolve(base, ref));
     } catch {
       node.value = "";
-      warnings.push("A publisher style resource could not be loaded safely.");
+      reportIssue(
+        warnings,
+        issues,
+        "degraded",
+        "A publisher style resource could not be loaded safely.",
+      );
     }
   }
   return css.generate(tree);

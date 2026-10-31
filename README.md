@@ -6,7 +6,7 @@
 
 A private, **EPUB-first book library** for Chrome. Read EPUB and MOBI books, keep **PDF, DjVu and Markdown** in a separate Documents collection, and use fullscreen reading, bookmarks, highlights and local OCR throughout.
 
-![Version 0.4.6](https://img.shields.io/badge/version-0.4.6-385546)
+![Version 0.4.7](https://img.shields.io/badge/version-0.4.7-385546)
 ![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest_V3-70865b)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 [![Build and test](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml)
@@ -95,7 +95,7 @@ The app itself does not require a server, a Google account or an OCR subscriptio
 npm run package
 ```
 
-This creates `.output/folio-0.4.6-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
+This creates `.output/folio-0.4.7-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
 
 ### Develop and test
 
@@ -151,3 +151,5 @@ Markdown and MOBI use the reflowing reader, including chapters, typography, high
 ![Original PDF pages with local text selection, zoom and page navigation](docs/images/pdf-reader.png)
 
 ![Fullscreen reading with bookmark, saved highlights, contents, settings and exit controls](docs/images/fullscreen-reader.png)
+
+The [second audit response](docs/AUDIT_V2_RESPONSE.md) records printing, annotation and recovery fixes, plus the larger changes still planned.

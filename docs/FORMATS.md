@@ -65,3 +65,10 @@ Folio 0.4 writes `.folio` **version 2** backups containing original files, decla
 PDF download is an unchanged original, not a regenerated document. Reflowing books can use the existing browser print-to-PDF flow. DjVu print output is a raster derivative of the current page, without an embedded OCR layer; it is not a lossless vector conversion. Backups are unencrypted and must be protected by their owner.
 
 The [validation record](VALIDATION.md) lists what was tested. Broader real-document, Windows/macOS Chrome, mobile-browser and largest-file testing remains necessary.
+
+
+## Print review and text anchors (v0.4.7)
+
+EPUB printing permits expected privacy-blocked online stylesheet imports and structurally repaired XML. Empty image placeholders are not treated as failed images. Missing images/styles, invalid image bytes, failed fonts and potentially degraded HTML recovery appear in a review list; printing continues only after **Print anyway**. Safety-budget errors, unreadable chapters and timeouts remain hard failures. DjVu offers current-page raster printing with non-selectable text and a separate unchanged original download. PDF continues to download its unchanged original.
+
+New renderer-v4 anchors include up to 256 characters of surrounding text and an optional complete-text SHA-256 fingerprint. A saved offset is trusted only with matching renderer/text identity and exact quote bytes. Otherwise conservative quote matching applies, and legacy ambiguous notes stay in review. The fingerprint is validated and preserved by current library/notes restore; no backup schema reset or source-file rewrite is required.

@@ -2415,3 +2415,45 @@ a {
     font-size: 16px;
   }
 }
+
+/* Reading notices stay clear of header actions and the page navigator. */
+.app.reading .toast {
+  top: auto;
+  bottom: 110px;
+}
+.toast.warning {
+  background: #634e1e;
+}
+.toc-item > span:nth-child(2) {
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.toc-page-count {
+  flex-shrink: 0;
+}
+.modal-actions {
+  flex-wrap: wrap;
+}
+.print-review {
+  padding: 14px;
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  max-height: 250px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.print-review h3 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.print-review ul {
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+}

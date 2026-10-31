@@ -1,5 +1,7 @@
 # Audit review and implementation decisions
 
+For the later v0.4.5 re-audit and v0.4.7 changes, see [the second response](AUDIT_V2_RESPONSE.md).
+
 Reviewed against the [original audit](AUDIT.md), commit `8295eef`, and the v0.2 source it inspected. The original report is preserved unchanged. This response describes the v0.3 changes, distinguishes recommendations from verified defects, and records what remains open.
 
 ## Decision

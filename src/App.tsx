@@ -17,6 +17,7 @@ import {
   message,
   removeBook,
   updateBook,
+  flushBookUpdates,
   bookCollection,
   type LibraryCollection,
   type Book,
@@ -40,6 +41,7 @@ import { Icon } from "./icons";
 import {
   documentText,
   quoteLocator,
+  locatorFactory,
   resolveLocator,
   RENDERER_VERSION,
   type TextLocator,
@@ -47,6 +49,8 @@ import {
 import { migrateLocators } from "./migrate-locators";
 import { contentHash } from "./content-hash";
 import { persistBooks } from "./binary-storage";
+import { preparePrintLayout } from "./printing";
+import type { RenderIssue } from "./render-issues";
 import { createDocumentPreview, PREVIEW_VERSION } from "./thumbnails";
 import { backupLibrary, restoreLibrary } from "./backup";
 import { storageStatus } from "./storage";
@@ -244,11 +248,20 @@ export function App() {
     [sort, setSort] = useState("recent");
   const [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
+    [notification, setNotification] = useState<{
+      message: string;
+      kind: "info" | "warning" | "success";
+    }>({ message: "", kind: "info" }),
     [modal, setModal] = useState<
       "drive" | "print" | "ocr" | "delete" | "reading" | "storage" | null
     >(null),
     [deleteId, setDeleteId] = useState<string | null>(null);
+  const notice = notification.message;
+  const setNotice = useCallback(
+    (message: string, kind: "info" | "warning" | "success" = "info") =>
+      setNotification({ message, kind }),
+    [],
+  );
   const [chapter, setChapter] = useState(0),
     [engine, setEngine] = useState<DocumentEngine | null>(null),
     [rendered, setRendered] = useState<Rendered | null>(null),
@@ -376,7 +389,8 @@ export function App() {
   const [counting, setCounting] = useState(false);
   const [driveLink, setDriveLink] = useState(""),
     [driveBusy, setDriveBusy] = useState(""),
-    [printScope, setPrintScope] = useState("chapter");
+    [printScope, setPrintScope] = useState("chapter"),
+    [printReview, setPrintReview] = useState<RenderIssue[]>([]);
   const [ocrImage, setOcrImage] = useState(0),
     [ocrText, setOcrText] = useState(""),
     [ocrProgress, setOcrProgress] = useState(""),
@@ -486,7 +500,7 @@ export function App() {
     if (!notice) return;
     const t = setTimeout(() => setNotice(""), 4500);
     return () => clearTimeout(t);
-  }, [notice]);
+  }, [notification, setNotice]);
   useEffect(
     () => () => {
       driveAbort.current?.abort();
@@ -640,6 +654,7 @@ export function App() {
   };
   useEffect(() => {
     setReadingError("");
+    setPrintReview([]);
     if (!selectedId) {
       setEngine(null);
       setRendered(null);
@@ -715,6 +730,7 @@ export function App() {
     paginator.current = null;
     setPageInfo(null);
     setChapterLoading(true);
+    setPrintReview([]);
     setReadingError("");
     setSelection(null);
     setRendered(null);
@@ -734,7 +750,11 @@ export function App() {
       .then((r) => {
         if (!cancel && seq === loadSequence.current) {
           setRendered(r);
-          if (r.warnings.length) setNotice(r.warnings[0]!);
+          const warning =
+            r.issues === undefined
+              ? r.warnings[0]
+              : r.issues.find((issue) => issue.level !== "info")?.message;
+          if (warning) setNotice(warning, "warning");
         }
       })
       .catch((e) => {
@@ -746,10 +766,6 @@ export function App() {
       .finally(() => {
         if (!cancel) setChapterLoading(false);
       });
-    if (selectedId && engine.chapters[chapter]?.linear)
-      void updateBook(selectedId, { chapter }).catch((e) =>
-        setError(message(e)),
-      );
     return () => {
       cancel = true;
       controller.abort();
@@ -776,6 +792,17 @@ export function App() {
     requestedPage.current = last ? "last" : undefined;
     jump.current = anchor || null;
     resumeLocator.current = undefined;
+    if (engine.fixedPages && selectedId && next !== chapter)
+      // Original page indices are known before rasterization. Keep an explicit
+      // page turn even if the user returns to the library before it finishes.
+      void updateBook(selectedId, {
+        chapter: next,
+        page: next + 1,
+        pageCount: engine.linearCount,
+        position: 0,
+        textOffset: undefined,
+        locator: undefined,
+      }).catch((error) => setError(message(error)));
     if (next === chapter && frame.current?.contentDocument) {
       const target = anchor
         ? frame.current.contentDocument.querySelector(
@@ -819,6 +846,10 @@ export function App() {
       ),
     );
     const text = documentText(doc);
+    const captureLocator = locatorFactory(
+      text,
+      engine.chapters[chapterIndex]!.href,
+    );
     if (resumeLocator.current) {
       const restored = resolveLocator(text, resumeLocator.current);
       textOffset.current = restored?.start;
@@ -875,11 +906,7 @@ export function App() {
             chapter: chapterIndex,
             position: s.progress,
             textOffset: s.offset,
-            locator: quoteLocator(
-              text,
-              engine.chapters[chapterIndex]!.href,
-              s.offset,
-            ),
+            locator: captureLocator(s.offset),
             page: engine.fixedPages ? chapterIndex + 1 : s.page,
             pageCount: engine.fixedPages ? engine.linearCount : s.pages,
             readingMode: doc.documentElement.dataset.readingMode as ReadingMode,
@@ -1103,7 +1130,7 @@ export function App() {
       created: Date.now(),
     });
     await refresh();
-    setNotice("Bookmark saved.");
+    setNotice("Bookmark saved.", "success");
   };
   const highlight = async () => {
     if (!selection || !active || !engine) return;
@@ -1134,7 +1161,7 @@ export function App() {
     setSelection(null);
     await refresh();
     setTab("highlights");
-    setNotice("Highlight saved.");
+    setNotice("Highlight saved.", "success");
   };
   const removeMark = async (id: string) => {
     await db.marks.delete(id);
@@ -1206,6 +1233,7 @@ export function App() {
     }
   };
   const closeModal = useCallback(() => {
+    setPrintReview([]);
     setModal(null);
     driveAbort.current?.abort();
     ocrCanceled.current = true;
@@ -1317,7 +1345,7 @@ export function App() {
       canceled = true;
     };
   }, [modal, active?.id, chapter, ocrImage, rendered]);
-  const print = async () => {
+  const print = async (allowLoss = false) => {
     if (!engine) return;
     if (engine.format === "pdf" && active) {
       download(active.blob, active.fileName || `${active.title}.pdf`);
@@ -1330,81 +1358,22 @@ export function App() {
     setBusy("Preparing print layout…");
     setError("");
     try {
-      let content = "";
-      const indices =
-        printScope === "book" && !engine.fixedPages
-          ? engine.chapters.flatMap((c, i) => (c.linear ? [i] : []))
-          : [chapter];
-      if (indices.length > 300)
-        throw Error(
-          "Print one chapter at a time for books with more than 300 chapters.",
-        );
-      for (const i of indices) {
-        setBusy(
-          `Preparing chapter ${indices.indexOf(i) + 1} of ${indices.length}…`,
-        );
-        const r = await engine.render(i, controller.signal, {
-          width: 1754,
-          height: 2480,
-          zoom: 1,
-          mode: "horizontal",
-          pixelRatio: 1,
-        });
-        if (r.warnings.length)
-          throw Error("Review this chapter before printing: " + r.warnings[0]);
-        const pageContent = r.fixedPage
-          ? `<img src="${r.images[0]?.src}" alt="Page ${i + 1}" style="width:100%;height:auto"/>`
-          : r.html;
-        content += `<section class="folio-print-chapter">${pageContent}</section>`;
-        if (content.length > 16 * 1024 * 1024)
-          throw Error(
-            "This print layout is too large. Print individual chapters instead.",
-          );
-      }
-      const p = document.createElement("iframe");
+      const prepared = await preparePrintLayout(
+        engine,
+        chapter,
+        printScope,
+        controller.signal,
+        setBusy,
+      );
+      const p = prepared.frame;
       printFrame = p;
-      p.title = "Print layout";
-      p.setAttribute("sandbox", "allow-same-origin allow-modals");
-      p.className = "print-frame";
-      document.body.append(p);
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(
-          () => reject(Error("Print layout took too long to load.")),
-          30000,
-        );
-        controller.signal.addEventListener(
-          "abort",
-          () => {
-            clearTimeout(timeout);
-            reject(new DOMException("Print canceled.", "AbortError"));
-          },
-          { once: true },
-        );
-        p.onload = () => {
-          clearTimeout(timeout);
-          resolve();
-        };
-        p.srcdoc = readerDocument(content, 17, false);
-      });
-      for (const img of Array.from(p.contentDocument?.images || [])) {
-        img.loading = "eager";
-        controller.signal.throwIfAborted();
-        await img.decode().catch(() => {
-          throw Error(
-            "An image failed to decode. No incomplete PDF was printed.",
-          );
-        });
+      const sameReview =
+        JSON.stringify(prepared.issues) === JSON.stringify(printReview);
+      if (prepared.issues.length && (!allowLoss || !sameReview)) {
+        setPrintReview(prepared.issues);
+        return;
       }
-      await p.contentDocument?.fonts.ready;
-      controller.signal.throwIfAborted();
-      if (
-        Array.from(p.contentDocument?.fonts || []).some(
-          (font) => font.status === "error",
-        )
-      )
-        throw Error(
-          "A book font failed to load. Please print another chapter.",
-        );
+      setPrintReview([]);
       setModal(null);
       p.contentWindow?.focus();
       p.contentWindow?.print();
@@ -1982,11 +1951,15 @@ export function App() {
             <button
               className="icon-btn"
               aria-label="Back to library"
-              onClick={() => {
+              onClick={safe(async () => {
+                if (selectedId)
+                  await flushBookUpdates(selectedId).catch((error) =>
+                    setError(message(error)),
+                  );
                 setSelectedId(null);
                 setEngine(null);
-                void refresh();
-              }}
+                await refresh();
+              })}
             >
               <Icon name="arrow" />
             </button>
@@ -2639,8 +2612,11 @@ export function App() {
         </div>
       )}
       {notice && !error && (
-        <div className="toast" role="status">
-          <Icon name="check" size={18} />
+        <div className={`toast ${notification.kind}`} role="status">
+          <Icon
+            name={notification.kind === "success" ? "check" : "info"}
+            size={18}
+          />
           <span>{notice}</span>
           <button
             aria-label="Dismiss notification"
@@ -2997,16 +2973,22 @@ export function App() {
           </div>
           <p>
             Open a clean print layout, then choose <strong>Save as PDF</strong>{" "}
-            in Chrome’s print dialog. Text stays selectable and original images
-            are used.
+            in the browser’s print dialog.{" "}
+            {fixedPages
+              ? "DjVu creates a raster image of the current page; text will not be selectable."
+              : "Reflowable text stays selectable and available original images are used."}
           </p>
           <div className="radio-options">
             <label>
               <input
                 type="radio"
                 name="scope"
+                disabled={!!busy}
                 checked={printScope === "chapter"}
-                onChange={() => setPrintScope("chapter")}
+                onChange={() => {
+                  setPrintScope("chapter");
+                  setPrintReview([]);
+                }}
               />
               <span>
                 <strong>
@@ -3019,13 +3001,17 @@ export function App() {
               <input
                 type="radio"
                 name="scope"
+                disabled={!!busy}
                 checked={printScope === "book"}
-                onChange={() => setPrintScope("book")}
+                onChange={() => {
+                  setPrintScope("book");
+                  setPrintReview([]);
+                }}
               />
               <span>
                 <strong>Whole book</strong>
                 <small>
-                  {engine?.chapters.length} chapters · Larger books take longer
+                  {engine?.linearCount} chapters · Larger books take longer
                 </small>
               </span>
             </label>
@@ -3038,13 +3024,49 @@ export function App() {
             books are best printed chapter by chapter. Highlights and OCR text
             layers are not included in this version.
           </p>
+          {!!printReview.length && (
+            <div className="print-review" role="status">
+              <h3>Review before printing</h3>
+              <p>
+                The layout may differ or omit content. Continue only if these
+                limitations are acceptable.
+              </p>
+              <ul>
+                {printReview.map((issue, i) => (
+                  <li key={i}>
+                    {issue.level === "lossy"
+                      ? "Missing content: "
+                      : "Formatting: "}
+                    {issue.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="modal-actions">
             <Button kind="secondary" onClick={closeModal}>
               Cancel
             </Button>
-            <Button onClick={() => void print()} disabled={!!busy}>
+            {engine?.format === "djvu" && active && (
+              <Button
+                kind="secondary"
+                onClick={() =>
+                  download(
+                    active.blob,
+                    active.fileName || `${active.title}.djvu`,
+                  )
+                }
+              >
+                Download original DjVu
+              </Button>
+            )}
+            <Button
+              onClick={() => void print(!!printReview.length)}
+              disabled={!!busy}
+            >
               <Icon name="print" size={17} />
-              {busy || "Open print dialog"}
+              {busy ||
+                (printReview.length ? "Print anyway" : "Open print dialog")}
             </Button>
           </div>
         </Modal>

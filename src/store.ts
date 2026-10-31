@@ -90,8 +90,24 @@ db.version(2).stores({
 });
 installBinaryStorage(db);
 db.books.hook("reading", hydrateBook);
+const bookWrites = new Map<string, Promise<unknown>>();
 export function updateBook(id: string, changes: Partial<Omit<Book, "id">>) {
-  return persistBookWrites(() => db.books.update(id, changes));
+  // Keep retries inside invocation order. Otherwise an older position save can
+  // retry after a newer chapter save and move the reader back on reopening.
+  const snapshot = { ...changes };
+  const previous = bookWrites.get(id) || Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(() => persistBookWrites(() => db.books.update(id, snapshot)));
+  bookWrites.set(id, next);
+  const release = () => {
+    if (bookWrites.get(id) === next) bookWrites.delete(id);
+  };
+  void next.then(release, release);
+  return next;
+}
+export async function flushBookUpdates(id: string) {
+  while (bookWrites.has(id)) await bookWrites.get(id);
 }
 export async function removeBook(id: string) {
   await db.transaction("rw", db.books, db.marks, db.ocr, async () => {

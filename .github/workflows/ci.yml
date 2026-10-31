@@ -31,7 +31,14 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm run build
+      - name: Restore pinned EPUB corpus source cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/folio-epub-corpus
+          key: ${{ runner.os }}-folio-corpus-${{ hashFiles('scripts/corpus.py') }}
       - run: npm test
+        env:
+          FOLIO_CORPUS_CACHE: ${{ runner.temp }}/folio-epub-corpus
       - run: npm run build:pages
       - run: npm run test:pages
       - run: python3 scripts/package.py

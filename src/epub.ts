@@ -9,6 +9,8 @@ import DOMPurify from "dompurify";
 import { rewriteCss } from "./publisher-css";
 import type { DocumentFormat } from "./document-types";
 import { LocalFileReader } from "./file-reading";
+import { parseChapter } from "./xhtml";
+import { reportIssue, type RenderIssue } from "./render-issues";
 configure({ useWebWorkers: false });
 export interface Chapter {
   href: string;
@@ -24,6 +26,7 @@ export interface Rendered {
   html: string;
   images: { src: string; name: string; path?: string }[];
   warnings: string[];
+  issues?: RenderIssue[];
   fixedPage?: { width: number; height: number };
 }
 const MAX_ENTRY = 64 * 1024 * 1024;
@@ -477,16 +480,8 @@ export class Epub {
     if (!chapter) throw Error("Chapter not found.");
     const warnings: string[] = [];
     const source = await this.text(chapter.href);
-    let parsed = new DOMParser().parseFromString(
-      source,
-      "application/xhtml+xml",
-    );
-    if (parsed.querySelector("parsererror")) {
-      parsed = new DOMParser().parseFromString(source, "text/html");
-      warnings.push(
-        "This chapter contains invalid XHTML; HTML recovery was used.",
-      );
-    }
+    const { doc: parsed, issues } = parseChapter(source);
+    warnings.push(...issues.map((issue) => issue.message));
     // Collect head styles before sanitization. DOMPurify deliberately drops link.
     const sheets: { text?: string; href?: string; media?: string }[] = [];
     for (const node of Array.from(parsed.querySelectorAll("style,link"))) {
@@ -558,9 +553,21 @@ export class Epub {
         (path) => this.resource(path, signal),
         warnings,
         cssBudget,
+        0,
+        issues,
       );
     const styles: string[] = [];
     for (const sheet of sheets) {
+      if (sheet.href && /^(?:https?:)?\/\//i.test(sheet.href)) {
+        reportIssue(
+          warnings,
+          issues,
+          "info",
+          "Online publisher styles were blocked; local formatting is used.",
+        );
+        continue;
+      }
+
       try {
         const base = sheet.href
           ? resolvePath(chapter.href, sheet.href)
@@ -576,7 +583,12 @@ export class Epub {
           `<style>@scope ([data-folio-html=${CSS.escape(chapter.href)}]) {${text.replaceAll("<", "\\3c ")}}</style>`,
         );
       } catch {
-        warnings.push("Some publisher styles could not be loaded safely.");
+        reportIssue(
+          warnings,
+          issues,
+          "degraded",
+          "Some publisher styles could not be loaded safely.",
+        );
       }
     }
     for (const element of Array.from(body.querySelectorAll("[style]"))) {
@@ -595,13 +607,23 @@ export class Epub {
         element.removeAttribute("style");
       }
     }
+    const singleSvg = body.querySelector("svg");
+    if (
+      body.childElementCount === 1 &&
+      !body.textContent?.trim() &&
+      body.querySelectorAll("svg").length === 1 &&
+      body.querySelectorAll("img,image").length === 1 &&
+      singleSvg?.querySelector("image") &&
+      singleSvg.getAttribute("preserveAspectRatio") === "none"
+    )
+      singleSvg.setAttribute("preserveAspectRatio", "xMidYMid meet");
     const images: Rendered["images"] = [];
     for (const img of Array.from(body.querySelectorAll("img,image"))) {
       const ref =
         img.getAttribute("src") ||
         img.getAttribute("href") ||
         img.getAttribute("xlink:href");
-      if (!ref) continue;
+      if (!ref?.trim()) continue;
       try {
         const path = resolvePath(chapter.href, ref);
         const src = await this.resource(path, signal);
@@ -614,7 +636,12 @@ export class Epub {
         }
         images.push({ src, name: path.split("/").pop() || "Page image", path });
       } catch {
-        warnings.push("An image could not be loaded safely.");
+        reportIssue(
+          warnings,
+          issues,
+          "lossy",
+          "An image could not be loaded safely.",
+        );
         for (const name of ["src", "href", "xlink:href"])
           img.removeAttribute(name);
         img.setAttribute("alt", "Image unavailable");
@@ -658,7 +685,12 @@ export class Epub {
       inner.append(owner.importNode(child, true));
     outer.append(inner);
     signal?.throwIfAborted();
-    return { html: styles.join("") + outer.outerHTML, images, warnings };
+    return {
+      html: styles.join("") + outer.outerHTML,
+      images,
+      warnings,
+      issues,
+    };
   }
   chapterSize(index: number) {
     const chapter = this.chapters[index];

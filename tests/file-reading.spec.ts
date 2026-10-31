@@ -54,6 +54,28 @@ test("large EPUB chapters survive failing sliced Blob streams and arrayBuffer re
         );
       return arrayBuffer.call(this);
     };
+    for (const method of ["add", "put"] as const) {
+      const original = IDBObjectStore.prototype[method];
+      IDBObjectStore.prototype[method] = function (
+        value: Record<string, unknown>,
+        key?: IDBValidKey,
+      ) {
+        if (
+          sessionStorage.getItem("fail-blob-reads") &&
+          this.name === "books" &&
+          ["blob", "cover", "prepared"].some(
+            (field) => value[field] instanceof Blob,
+          )
+        )
+          throw new DOMException(
+            "Error preparing Blob/File data to be stored in object store",
+            "UnknownError",
+          );
+        return key === undefined
+          ? original.call(this, value)
+          : original.call(this, value, key);
+      };
+    }
   });
   await page.goto("/reader.html");
   await page
@@ -70,6 +92,7 @@ test("large EPUB chapters survive failing sliced Blob streams and arrayBuffer re
   ).toBeVisible();
   await page.getByRole("button", { name: "Bookmark", exact: true }).click();
   await page.getByRole("button", { name: "Back to library" }).click();
+  await expect(page.locator(".book-card")).toHaveCount(1);
   await page.reload();
   await page.getByRole("button", { name: "Read The Quiet Atlas" }).click();
   await expect(

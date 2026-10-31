@@ -140,6 +140,9 @@ class PdfDocument extends FixedDocument {
       standardFontDataUrl: asset("documents/pdf/standard_fonts/"),
       wasmUrl: asset("documents/pdf/wasm/"),
       canvasMaxAreaInBytes: 24000000,
+      enableXfa: false,
+      stopAtErrors: false, // Retain PDF.js recovery of repairable documents.
+      maxImageSize: -1, // Do not silently omit embedded images; canvas is budgeted above.
     });
     try {
       this.pdf = await this.task.promise;
@@ -154,8 +157,20 @@ class PdfDocument extends FixedDocument {
     try {
       const { info } = await this.pdf.getMetadata();
       const metadata = info as { Title?: string; Author?: string };
-      if (typeof metadata.Title === "string" && metadata.Title.trim())
-        this.title = metadata.Title.trim().slice(0, 10000);
+      if (typeof metadata.Title === "string") {
+        const title = metadata.Title.trim();
+        if (
+          title &&
+          !/^Microsoft\s+Word\s*[-–:]/i.test(title) &&
+          !/^untitled$/i.test(title) &&
+          !/\.docx?$/i.test(title)
+        )
+          this.title =
+            title
+              .replace(/\.pdf$/i, "")
+              .trim()
+              .slice(0, 10000) || this.title;
+      }
       if (typeof metadata.Author === "string")
         this.author = metadata.Author.slice(0, 10000);
       const labels = await this.pdf.getPageLabels();

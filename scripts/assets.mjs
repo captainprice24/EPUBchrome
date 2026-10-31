@@ -22,6 +22,7 @@ for (const name of [
   "dexie",
   "@zip.js/zip.js",
   "dompurify",
+  "entities",
   "css-tree",
   "mdn-data",
   "@noble/hashes",

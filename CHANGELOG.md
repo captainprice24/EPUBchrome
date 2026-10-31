@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.7 — First response to the second audit
+
+- Recovered HTML named entities, missing standard namespaces and self-closing structure before sanitizing chapters; structural repair details are informational unless layout may be degraded.
+- Allowed printing with expected blocked online stylesheet imports and empty image placeholders. Genuine omissions, invalid images/fonts and degraded recovery require an explicit reviewed “Print anyway” choice.
+- Shared FileReader fallback with byte conversion and queued per-book metadata writes so delayed retries cannot overwrite newer positions; library return waits for pending saves.
+- Bound new repeated-text highlights to renderer v4, wider quote context and a complete text fingerprint; reused hashes during page saves/painting, preserved them in backups and retained legacy ambiguity for review.
+- Preserved image-only SVG page proportions, bounded contents titles, cleaned office-generated PDF titles, moved reading notices away from controls and corrected linear print counts.
+- Clarified DjVu raster printing and offered original-byte download; made supported PDF options explicit and strengthened fail-loud MOBI patch checks.
+- Cached the pinned corpus source outside disposable test output and preserved the second audit with a finding-by-finding response. Metadata/file schema separation, full search/routing, annotation editing and the larger UI split remain planned.
+
 ## 0.4.6 — Recoverable EPUB file reads
 
 - Replaced sliced-Blob ZIP streams with bounded byte reads for EPUB extraction and backups, including direct reads of locally stored byte chunks and a FileReader fallback for unavailable native Blob reads.

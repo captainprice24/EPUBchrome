@@ -1,9 +1,11 @@
-export const RENDERER_VERSION = 3;
+import { sha256 } from "@noble/hashes/sha2.js";
+export const RENDERER_VERSION = 4;
 export interface TextLocator {
   version: 1;
   spineHref: string;
   rendererVersion: number;
   offsetHint: number;
+  textHash?: string;
   textQuote: { exact: string; prefix: string; suffix: string };
 }
 export function textNodes(doc: Document) {
@@ -30,29 +32,60 @@ export function quoteLocator(
   spineHref: string,
   start: number,
   end = start + 96,
+  fingerprint?: string,
 ): TextLocator | undefined {
   start = Math.max(0, Math.min(start, text.length));
   end = Math.min(end, text.length);
   if (end <= start || !text.slice(start, end).trim()) return;
-  return {
+  const locator: TextLocator = {
     version: 1,
     spineHref,
     rendererVersion: RENDERER_VERSION,
     offsetHint: start,
     textQuote: {
       exact: text.slice(start, end),
-      prefix: text.slice(Math.max(0, start - 48), start),
-      suffix: text.slice(end, end + 48),
+      prefix: text.slice(Math.max(0, start - 256), start),
+      suffix: text.slice(end, end + 256),
     },
   };
+  locator.textHash = fingerprint || textFingerprint(text);
+  return locator;
+}
+const textFingerprint = (text: string) =>
+  Array.from(sha256(new TextEncoder().encode(text)), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+export function textHasher(text: string) {
+  let hash: string | undefined;
+  return () => (hash ??= textFingerprint(text));
+}
+export function locatorFactory(text: string, href: string) {
+  const hash = textHasher(text);
+  return (start: number, end?: number) =>
+    quoteLocator(text, href, start, end, hash());
 }
 const normalize = (text: string) => text.replace(/\s+/g, " ");
 export function resolveLocator(
   text: string,
   locator: TextLocator,
+  fingerprint = textHasher(text),
 ): { start: number; end: number } | null {
   const quote = locator.textQuote;
   if (!quote.exact.trim()) return null;
+  // Same renderer alone is insufficient. Verify the complete text fingerprint
+  // and the exact quote at its saved offset before trusting that offset.
+  const start = locator.offsetHint,
+    end = start + quote.exact.length;
+  if (
+    locator.rendererVersion === RENDERER_VERSION &&
+    locator.textHash &&
+    Number.isSafeInteger(start) &&
+    start >= 0 &&
+    text.slice(start, end) === quote.exact &&
+    locator.textHash === fingerprint()
+  )
+    return { start, end };
+
   // Store only whitespace-run deltas, not a pair of numeric arrays for every
   // character. Large chapters must not allocate hundreds of MB for one locator.
   const changes: { at: number; removed: number }[] = [];
@@ -109,9 +142,9 @@ export function resolveLocator(
   }
   if (!candidates.length) return null;
   candidates.sort((a, b) => b.score - a.score);
-  // Offsets are a hint only; ambiguity must not silently select another passage.
+  // Unverified legacy or changed-text ties must stay in review.
   if (candidates.length > 1 && candidates[0]!.score === candidates[1]!.score)
     return null;
-  const { start, end } = candidates[0]!;
-  return { start, end };
+  const best = candidates[0]!;
+  return { start: best.start, end: best.end };
 }

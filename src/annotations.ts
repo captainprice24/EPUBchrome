@@ -1,5 +1,10 @@
 import type { Mark } from "./store";
-import { textNodes as nodes, documentText, resolveLocator } from "./locators";
+import {
+  textNodes as nodes,
+  documentText,
+  resolveLocator,
+  textHasher,
+} from "./locators";
 export function selectionOffsets(doc: Document) {
   const s = doc.getSelection();
   if (!s?.rangeCount || s.isCollapsed) return null;
@@ -32,13 +37,14 @@ export function applyHighlights(doc: Document, marks: Mark[]) {
   }
   doc.body.normalize();
   const text = documentText(doc);
+  const fingerprint = textHasher(text);
   const href = doc
     .querySelector("[data-folio-html]")
     ?.getAttribute("data-folio-html");
   const resolved = marks.flatMap((mark) => {
     const range =
       mark.locator && mark.locator.spineHref === href
-        ? resolveLocator(text, mark.locator)
+        ? resolveLocator(text, mark.locator, fingerprint)
         : null;
     if (!range) {
       unresolved.push(mark.id);

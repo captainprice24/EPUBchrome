@@ -1,6 +1,6 @@
 import { db, type Book } from "./store";
 import { Epub, readerDocument } from "./epub";
-import { documentText, quoteLocator, RENDERER_VERSION } from "./locators";
+import { documentText, locatorFactory, RENDERER_VERSION } from "./locators";
 import { persistBookWrites } from "./binary-storage";
 
 // A DOM-dependent migration cannot run inside Dexie's schema upgrade transaction.
@@ -25,6 +25,7 @@ export async function migrateLocators(book: Book, epub: Epub) {
         "text/html",
       );
       const text = documentText(doc);
+      const captureLocator = locatorFactory(text, href);
       for (const mark of marks.filter(
         (m) => m.chapter === chapter && !m.locator,
       )) {
@@ -32,9 +33,7 @@ export async function migrateLocators(book: Book, epub: Epub) {
         let anchor =
           start === undefined
             ? undefined
-            : quoteLocator(
-                text,
-                href,
+            : captureLocator(
                 start,
                 mark.kind === "highlight" ? mark.end : undefined,
               );
@@ -62,7 +61,7 @@ export async function migrateLocators(book: Book, epub: Epub) {
         });
       }
       if (chapter === book.chapter && book.textOffset !== undefined && !locator)
-        locator = quoteLocator(text, href, book.textOffset);
+        locator = captureLocator(book.textOffset);
     } catch {
       // Preserve the note and expose its unresolved location; never delete it.
       for (const mark of marks.filter(

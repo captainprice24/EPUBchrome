@@ -5,10 +5,11 @@ from pathlib import Path
 from zipfile import ZipFile, ZIP_STORED, ZIP_DEFLATED
 import subprocess
 import tempfile
+import os
 
 PIN = '7651e2002b631e6577fadf7e9e0692fa6efb8746'
 SAMPLES = ['wasteland-woff', 'internallinks', 'regime-anticancer-arabic']
-cache = Path(tempfile.gettempdir()) / 'folio-epub-corpus'
+cache = Path(os.environ.get('FOLIO_CORPUS_CACHE', str(Path(tempfile.gettempdir()) / 'folio-epub-corpus')))
 if not (cache / '.git').exists():
     subprocess.run(['git', 'clone', '--depth', '1', '--filter=blob:none', '--sparse',
                     'https://github.com/IDPF/epub3-samples.git', str(cache)], check=True)
