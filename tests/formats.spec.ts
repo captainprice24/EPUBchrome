@@ -387,7 +387,6 @@ test("large DjVu takes the Blob-range decoder path and still renders original pa
   ).toHaveJSProperty("complete", true);
   await page.getByRole("button", { name: "Next page", exact: true }).click();
   await expect(page.locator(".page-count")).toHaveText("Page 2 of 3");
-  await expect(page.getByRole("button", { name: "Open OCR" })).toBeEnabled();
   await page.getByRole("button", { name: "Back to library" }).click();
   await page.getByLabel("Import document file").setInputFiles({
     name: "broken.djvu",
@@ -499,8 +498,8 @@ test("Books and Documents categorize existing files, preserve manual moves and k
         const request = indexedDB.open("folio-library");
         request.onsuccess = () => {
           const db = request.result,
-            tx = db.transaction("books", "readwrite"),
-            store = tx.objectStore("books"),
+            tx = db.transaction("library", "readwrite"),
+            store = tx.objectStore("library"),
             cursor = store.openCursor();
           cursor.onsuccess = () => {
             const row = cursor.result;

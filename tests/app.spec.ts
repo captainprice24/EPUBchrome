@@ -99,55 +99,6 @@ test("unsafe content is isolated and malformed imports leave library usable", as
     page.getByRole("button", { name: "Read The Quiet Atlas" }),
   ).toBeVisible();
 });
-test("local browser OCR recognizes a scan with packaged worker, WASM and model", async ({
-  page,
-  context,
-}) => {
-  const imagePage = await context.newPage();
-  await imagePage.setContent(
-    '<html><body style="margin:0;padding:30px;background:white"><div style="font:bold 42px Arial;color:black;display:inline-block">READING IS A JOY</div></body></html>',
-  );
-  await imagePage.locator("div").screenshot({ path: "test-results/scan.png" });
-  await imagePage.close();
-  execFileSync("python3", ["scripts/fixtures.py", "test-results/scan.png"]);
-  await page.goto("/reader.html");
-  await page.getByLabel("Import document file").setInputFiles(fixture("scan"));
-  await expect(
-    page
-      .frameLocator('iframe[title="Book chapter"]')
-      .getByRole("heading", { name: "A scanned page" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Open OCR" }).click();
-  await page
-    .getByRole("button", { name: "Recognize text", exact: true })
-    .click();
-  await expect(
-    page.getByRole("textbox", { name: "Recognized text" }),
-  ).toHaveValue(/READING IS A JOY/, { timeout: 50000 });
-  await page
-    .getByRole("textbox", { name: "Recognized text" })
-    .fill("READING IS A JOY — corrected locally");
-  await page.getByRole("button", { name: "Save edits", exact: true }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Your edits were saved" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Close dialog" }).click();
-  await page.getByRole("button", { name: "Open OCR" }).click();
-  await expect(
-    page.getByRole("textbox", { name: "Recognized text" }),
-  ).toHaveValue("READING IS A JOY — corrected locally");
-  await page.getByLabel("IMAGE IN THIS CHAPTER").selectOption("1");
-  await expect(
-    page.getByRole("textbox", { name: "Recognized text" }),
-  ).toHaveCount(0);
-  await page.getByLabel("IMAGE IN THIS CHAPTER").selectOption("0");
-  await expect(
-    page.getByRole("textbox", { name: "Recognized text" }),
-  ).toHaveValue("READING IS A JOY — corrected locally");
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Save text" }).click();
-  expect((await download).suggestedFilename()).toBe("recognized-text.txt");
-});
 test("print layout includes all chapters; library search and removal work", async ({
   page,
 }) => {
@@ -249,7 +200,10 @@ test("reading position and exported notes survive reopening a book", async ({
             const r = indexedDB.open("folio-library");
             r.onsuccess = () => {
               const d = r.result;
-              const get = d.transaction("books").objectStore("books").getAll();
+              const get = d
+                .transaction("library")
+                .objectStore("library")
+                .getAll();
               get.onsuccess = () => {
                 resolve(get.result[0]?.position || 0);
                 d.close();

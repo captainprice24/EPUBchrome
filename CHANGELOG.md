@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 — Lightweight catalogue, no OCR
+
+- Separated library metadata, source files and previews; library refresh and position saves no longer materialize or rewrite every stored book.
+- Added an atomic, one-record-at-a-time upgrade that preserves old originals in place, IDs, reading copies, positions and notes; failures roll back, blocked/stale tabs get reload guidance.
+- Loaded covers as cards approach the viewport, released offscreen object URLs and bounded the compressed preview cache to 8 MiB/24 entries. Missing previews are generated on demand.
+- Reused the selected source for background chapter counting and loaded backup sources one at a time. Restores retain full validation and atomic commit; large archive memory limits still apply.
+- Removed Tesseract, OCR controls, worker, WASM variants and model downloads at the owner’s request. Scanned pages still display; existing recognition text remains in notes export and backup/restore.
+- Reduced the extension ZIP to 3.96 MB (8.90 MB unpacked), from approximately 21.5 MB compressed before OCR removal. Validated 63 unique reader and 5 Pages scenarios across full/focused runs, including migration, rollback, lazy covers and legacy text backup/restore.
+- Updated installation, privacy, format and audit-response documentation.
+
 ## 0.4.7 — First response to the second audit
 
 - Recovered HTML named entities, missing standard namespaces and self-closing structure before sanitizing chapters; structural repair details are informational unless layout may be degraded.

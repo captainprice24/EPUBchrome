@@ -8,7 +8,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Worker } from "tesseract.js";
 import {
   db,
   asset,
@@ -21,6 +20,16 @@ import {
   bookCollection,
   type LibraryCollection,
   type Book,
+  type BookMetadata,
+  type DatabaseState,
+  getBook,
+  getPreview,
+  addBook,
+  replaceBookFiles,
+  savePreview,
+  bookTables,
+  openLibrary,
+  watchDatabase,
   type Mark,
 } from "./store";
 import { Epub, readerDocument, type Rendered } from "./epub";
@@ -38,6 +47,7 @@ import { useReaderFullscreen } from "./useFullscreen";
 import { applyHighlights, selectionOffsets } from "./annotations";
 import { driveImport } from "./drive";
 import { Icon } from "./icons";
+import { Cover } from "./Cover";
 import {
   documentText,
   quoteLocator,
@@ -48,7 +58,7 @@ import {
 } from "./locators";
 import { migrateLocators } from "./migrate-locators";
 import { contentHash } from "./content-hash";
-import { persistBooks } from "./binary-storage";
+import { persistBookWrites } from "./binary-storage";
 import { preparePrintLayout } from "./printing";
 import type { RenderIssue } from "./render-issues";
 import { createDocumentPreview, PREVIEW_VERSION } from "./thumbnails";
@@ -137,47 +147,7 @@ function Modal({
     </div>
   );
 }
-function Cover({
-  book,
-  large = false,
-}: {
-  book: Pick<Book, "title" | "author" | "cover" | "format" | "collection">;
-  large?: boolean;
-}) {
-  const [url, setUrl] = useState("");
-  useLayoutEffect(() => {
-    if (!book.cover) {
-      setUrl("");
-      return;
-    }
-    const u = URL.createObjectURL(book.cover);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [book.cover]);
-  const theme = book.title.length % 4;
-  return (
-    <div
-      className={`cover cover-${theme} ${url ? "has-image" : ""} ${large ? "large" : ""}`}
-      aria-hidden="true"
-    >
-      {url ? (
-        <img src={url} alt="" onError={() => setUrl("")} />
-      ) : (
-        <>
-          <span className="cover-kicker">
-            {bookCollection(book) === "documents"
-              ? `${formatNames[book.format || "pdf"]} DOCUMENT`
-              : "A FOLIO EDITION"}
-          </span>
-          <div className="cover-orbit" />
-          <strong>{book.title}</strong>
-          <span className="cover-author">{book.author}</span>
-          <span className="cover-bottom">F &nbsp; / &nbsp; READING ROOM</span>
-        </>
-      )}
-    </div>
-  );
-}
+
 function Button({
   children,
   onClick,
@@ -234,7 +204,7 @@ function ZoomControls({
 }
 export function App() {
   const webPreview = import.meta.env.MODE === "pages";
-  const [books, setBooks] = useState<Book[]>([]),
+  const [books, setBooks] = useState<BookMetadata[]>([]),
     [marks, setMarks] = useState<Mark[]>([]),
     [selectedId, setSelectedId] = useState<string | null>(null),
     [filter, setFilter] = useState<
@@ -253,7 +223,7 @@ export function App() {
       kind: "info" | "warning" | "success";
     }>({ message: "", kind: "info" }),
     [modal, setModal] = useState<
-      "drive" | "print" | "ocr" | "delete" | "reading" | "storage" | null
+      "drive" | "print" | "delete" | "reading" | "storage" | null
     >(null),
     [deleteId, setDeleteId] = useState<string | null>(null);
   const notice = notification.message;
@@ -332,7 +302,7 @@ export function App() {
   const restoreInput = useRef<HTMLInputElement>(null);
   const restoreQueue = useRef<Promise<void>>(Promise.resolve());
   const previewAttempts = useRef(new Set<string>());
-  const [ocrNoteId, setOcrNoteId] = useState<string | null>(null);
+  const previewQueue = useRef<Promise<void>>(Promise.resolve());
   const [pageZoom, setPageZoom] = useState(1);
   const fullscreen = useReaderFullscreen(!!selectedId);
   const previewBanner = useRef<HTMLDivElement>(null);
@@ -391,22 +361,29 @@ export function App() {
     [driveBusy, setDriveBusy] = useState(""),
     [printScope, setPrintScope] = useState("chapter"),
     [printReview, setPrintReview] = useState<RenderIssue[]>([]);
-  const [ocrImage, setOcrImage] = useState(0),
-    [ocrText, setOcrText] = useState(""),
-    [ocrProgress, setOcrProgress] = useState(""),
-    [ocrBusy, setOcrBusy] = useState(false),
-    [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
-  const ocrBusyRef = useRef(false);
-  ocrBusyRef.current = ocrBusy;
+  const openedBook = useRef<Book | null>(null);
+  const [databaseState, setDatabaseState] = useState<DatabaseState>("opening");
+  const [visibleCovers, setVisibleCovers] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const coverVisibility = useCallback(
+    (id: string, visible: boolean) =>
+      setVisibleCovers((current) => {
+        if (current.has(id) === visible) return current;
+        const next = new Set(current);
+        if (visible) next.add(id);
+        else next.delete(id);
+        return next;
+      }),
+    [],
+  );
+  useEffect(() => watchDatabase(setDatabaseState), []);
   const input = useRef<HTMLInputElement>(null),
     frame = useRef<HTMLIFrameElement>(null),
-    worker = useRef<Worker | null>(null),
     driveAbort = useRef<AbortController | null>(null),
     loadSequence = useRef(0),
     engineId = useRef<string | null>(null),
     jump = useRef<string | null>(null),
-    ocrCanceled = useRef(false),
-    ocrJob = useRef(0),
     printAbort = useRef<AbortController | null>(null),
     position = useRef(0),
     textOffset = useRef<number | undefined>(undefined),
@@ -418,8 +395,9 @@ export function App() {
   const bookMarks = marks.filter((m) => m.bookId === selectedId);
   const currentMarks = bookMarks.filter((m) => m.chapter === chapter);
   const refresh = useCallback(async () => {
+    await openLibrary();
     const [b, m] = await Promise.all([
-      db.books.orderBy("lastRead").reverse().toArray(),
+      db.library.orderBy("lastRead").reverse().toArray(),
       db.marks.toArray(),
     ]);
     setBooks(b);
@@ -434,7 +412,8 @@ export function App() {
     const book = books.find(
       (item) =>
         bookCollection(item) === filter &&
-        !item.cover &&
+        !item.hasCover &&
+        visibleCovers.has(item.id) &&
         item.previewVersion !== PREVIEW_VERSION &&
         !previewAttempts.current.has(item.id),
     );
@@ -442,41 +421,42 @@ export function App() {
     previewAttempts.current.add(book.id);
     const controller = new AbortController();
     let finished = false;
-    void (async () => {
-      let parser: DocumentEngine | undefined;
-      try {
-        parser = await openDocument(
-          book.blob,
-          book.format || "epub",
-          book.fileName || book.title,
-          book.preparedVersion === 1 ? book.prepared : undefined,
-        );
-        controller.signal.throwIfAborted();
-        const cover = await createDocumentPreview(parser, controller.signal);
-        controller.signal.throwIfAborted();
-        await persistBooks([{ ...book, cover }], () =>
-          db.transaction("rw", db.books, async () => {
-            const current = await db.books.get(book.id);
-            if (current && !current.cover)
-              await db.books.update(book.id, {
-                cover,
-                previewVersion: PREVIEW_VERSION,
-              });
-          }),
-        );
-      } catch {
-        // Optional previews never overwrite originals, saved places or notes.
-      } finally {
-        await parser?.close().catch(() => {});
-        finished = true;
-      }
-      if (!controller.signal.aborted) await refresh();
-    })().catch(() => {});
+    // A visibility/filter change may cancel a file read that is already in
+    // flight. Wait for that job to release its parser before starting another.
+    const job = previewQueue.current
+      .catch(() => {})
+      .then(async () => {
+        if (controller.signal.aborted) return;
+        let parser: DocumentEngine | undefined;
+        try {
+          const source = await getBook(book.id);
+          controller.signal.throwIfAborted();
+          if (!source) return;
+          parser = await openDocument(
+            source.blob,
+            book.format || "epub",
+            book.fileName || book.title,
+            source.preparedVersion === 1 ? source.prepared : undefined,
+          );
+          controller.signal.throwIfAborted();
+          const cover = await createDocumentPreview(parser, controller.signal);
+          controller.signal.throwIfAborted();
+          await savePreview(book.id, cover, PREVIEW_VERSION);
+        } catch {
+          // Optional previews never overwrite originals, saved places or notes.
+        } finally {
+          await parser?.close().catch(() => {});
+          finished = true;
+        }
+        if (!controller.signal.aborted) await refresh();
+      });
+    previewQueue.current = job;
+    void job.catch(() => {});
     return () => {
       controller.abort();
       if (!finished) previewAttempts.current.delete(book.id);
     };
-  }, [books, selectedId, busy, filter, refresh]);
+  }, [books, selectedId, busy, filter, refresh, visibleCovers]);
   useEffect(() => {
     if (filter === "books" || filter === "documents")
       localStorage.setItem("folio-collection", filter);
@@ -504,7 +484,7 @@ export function App() {
   useEffect(
     () => () => {
       driveAbort.current?.abort();
-      void worker.current?.terminate();
+      printAbort.current?.abort();
     },
     [],
   );
@@ -530,12 +510,14 @@ export function App() {
     let parser: DocumentEngine | undefined;
     try {
       const hash = await contentHash(file);
-      let existing = await db.books.where("contentHash").equals(hash).first();
+      let existing = await db.library.where("contentHash").equals(hash).first();
       if (!existing) {
-        for (const candidate of await db.books
+        for (const candidate of await db.library
           .filter((b) => !b.contentHash && b.size === file.size)
           .toArray()) {
-          const candidateHash = await contentHash(candidate.blob);
+          const source = await getBook(candidate.id);
+          if (!source) continue;
+          const candidateHash = await contentHash(source.blob);
           await updateBook(candidate.id, { contentHash: candidateHash });
           if (candidateHash === hash) {
             existing = candidate;
@@ -552,19 +534,22 @@ export function App() {
           existing.format || "epub",
           existing.fileName || file.name,
         );
+        const cover =
+          (await getPreview(existing.id)) ||
+          (await createDocumentPreview(parser));
         const repaired = {
           blob: file,
           prepared: parser.prepared,
           preparedVersion: parser.prepared ? 1 : undefined,
         };
-        await persistBooks([{ ...existing, ...repaired }], () =>
-          db.transaction("rw", db.books, async () => {
-            const current = await db.books.get(existing!.id);
+        await persistBookWrites(() =>
+          db.transaction("rw", bookTables, async () => {
+            const current = await db.library.get(existing!.id);
             if (!current || current.contentHash !== hash)
               throw Error(
                 "This library entry changed. Return to the library and try again.",
               );
-            await db.books.update(current.id, repaired);
+            await replaceBookFiles(current.id, repaired, cover);
           }),
         );
         await refresh();
@@ -606,14 +591,14 @@ export function App() {
         contentHash: hash,
         rendererVersion: RENDERER_VERSION,
       };
-      const stored = await persistBooks([book], () =>
-        db.transaction("rw", db.books, async () => {
-          const match = await db.books
+      const stored = await persistBookWrites(() =>
+        db.transaction("rw", bookTables, async () => {
+          const match = await db.library
             .where("contentHash")
             .equals(hash)
             .first();
           if (match) return match;
-          await db.books.add(book);
+          await addBook(book);
           return book;
         }),
       );
@@ -656,6 +641,7 @@ export function App() {
     setReadingError("");
     setPrintReview([]);
     if (!selectedId) {
+      openedBook.current = null;
       setEngine(null);
       setRendered(null);
       setPageInfo(null);
@@ -668,8 +654,10 @@ export function App() {
     setPageInfo(null);
     setRendered(null);
     void (async () => {
-      let book = await db.books.get(selectedId);
+      let book = await getBook(selectedId);
       if (!book) throw Error("This book is no longer in the library.");
+      if (canceled) return;
+      openedBook.current = book;
       parser = await openDocument(
         book.blob,
         book.format || "epub",
@@ -711,6 +699,7 @@ export function App() {
       paginator.current?.destroy();
       paginator.current = null;
       if (parser) void parser.close().catch(() => {});
+      if (openedBook.current?.id === selectedId) openedBook.current = null;
       setSelection(null);
     };
   }, [selectedId]);
@@ -979,8 +968,10 @@ export function App() {
     void (async () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 450));
       if (canceled) return;
-      const book = await db.books.get(selectedId);
-      if (!book || canceled) return;
+      const metadata = await db.library.get(selectedId);
+      const source = openedBook.current;
+      if (!metadata || !source || source.id !== selectedId || canceled) return;
+      const book = { ...source, ...metadata };
       const cached = book.pagination?.key === key ? book.pagination.counts : [];
       const values = engine.chapters.map((_, i) =>
         countsKey.current === key && countsRef.current[i]
@@ -1236,119 +1227,14 @@ export function App() {
     setPrintReview([]);
     setModal(null);
     driveAbort.current?.abort();
-    ocrCanceled.current = true;
-    ocrJob.current++;
     printAbort.current?.abort();
-    if (worker.current && ocrBusyRef.current) {
-      void worker.current.terminate();
-      worker.current = null;
-    }
-    setOcrBusy(false);
   }, []);
-  const startOCR = async () => {
-    const image = rendered?.images[ocrImage];
-    if (!image || !active) return;
-    setOcrBusy(true);
-    setOcrText("");
-    setOcrConfidence(null);
-    setOcrProgress("Preparing local recognition…");
-    ocrCanceled.current = false;
-    const job = ++ocrJob.current;
-    let instance: Worker | undefined;
-    try {
-      const blob = await (await fetch(image.src)).blob();
-      const bitmap = await createImageBitmap(blob);
-      const pixels = bitmap.width * bitmap.height;
-      bitmap.close();
-      if (pixels > 40000000)
-        throw Error(
-          "This image is too large for local OCR. Use an image below 40 megapixels.",
-        );
-      const { createWorker } = await import("tesseract.js");
-      instance =
-        worker.current ||
-        (await createWorker("eng", 1, {
-          workerPath: asset("ocr/worker.min.js"),
-          corePath: asset("ocr/core"),
-          langPath: asset("ocr/lang"),
-          workerBlobURL: false,
-          logger: (m) => {
-            if (!ocrCanceled.current)
-              setOcrProgress(
-                m.status === "recognizing text"
-                  ? `Recognizing text… ${Math.round(m.progress * 100)}%`
-                  : "Preparing local recognition…",
-              );
-          },
-        }));
-      if (ocrCanceled.current || job !== ocrJob.current) return;
-      worker.current = instance;
-      const result = await instance.recognize(blob);
-      if (ocrCanceled.current || job !== ocrJob.current) return;
-      setOcrText(result.data.text);
-      setOcrConfidence(result.data.confidence);
-      const noteId = `${active.id}:${chapter}:${image.path || image.name}`;
-      await db.ocr.put({
-        id: noteId,
-        imagePath: image.path || image.name,
-        bookId: active.id,
-        chapter,
-        text: result.data.text,
-        confidence: result.data.confidence,
-        created: Date.now(),
-      });
-      setOcrNoteId(noteId);
-      setOcrProgress("Recognition complete. Original image unchanged.");
-    } catch (e) {
-      if (instance) {
-        await instance.terminate().catch(() => {});
-        instance = undefined;
-        worker.current = null;
-      }
-      if (!ocrCanceled.current && job === ocrJob.current) setError(message(e));
-    } finally {
-      if (instance && (ocrCanceled.current || job !== ocrJob.current))
-        await instance.terminate().catch(() => {});
-      if (job === ocrJob.current) {
-        setOcrBusy(false);
-      }
-    }
-  };
-  useEffect(() => {
-    if (modal !== "ocr" || !active) return;
-    let canceled = false;
-    setOcrText("");
-    setOcrConfidence(null);
-    setOcrProgress("");
-    setOcrNoteId(null);
-    const image = rendered?.images[ocrImage];
-    if (image)
-      void db.ocr
-        .where("[bookId+chapter]")
-        .equals([active.id, chapter])
-        .toArray()
-        .then((notes) => {
-          const note = notes.find(
-            (n) => n.imagePath === (image.path || image.name),
-          );
-          if (note && !canceled) {
-            setOcrText(note.text);
-            setOcrConfidence(note.confidence);
-            setOcrNoteId(note.id);
-            setOcrProgress("Previously recognized text, saved on this device.");
-          }
-        })
-        .catch((error) => {
-          if (!canceled) setError(message(error));
-        });
-    return () => {
-      canceled = true;
-    };
-  }, [modal, active?.id, chapter, ocrImage, rendered]);
   const print = async (allowLoss = false) => {
     if (!engine) return;
     if (engine.format === "pdf" && active) {
-      download(active.blob, active.fileName || `${active.title}.pdf`);
+      const source = openedBook.current || (await getBook(active.id));
+      if (source)
+        download(source.blob, active.fileName || `${active.title}.pdf`);
       return;
     }
     const controller = new AbortController();
@@ -1714,7 +1600,7 @@ export function App() {
                         }}
                       >
                         <span className="sr-only">Read {book.title}</span>
-                        <Cover book={book} />
+                        <Cover book={book} onVisible={coverVisibility} />
                         <span className="book-open-overlay">
                           <Icon name="book" />
                           Continue reading
@@ -1974,20 +1860,6 @@ export function App() {
             <div className="reader-tools">
               <button
                 className="icon-btn"
-                title="Recognize printed text in chapter images"
-                aria-label="Open OCR"
-                onClick={() => {
-                  setOcrImage(0);
-                  setOcrText("");
-                  setOcrConfidence(null);
-                  setOcrProgress("");
-                  setModal("ocr");
-                }}
-              >
-                <Icon name="scan" />
-              </button>
-              <button
-                className="icon-btn"
                 aria-label="Enter fullscreen"
                 title="Fullscreen (F)"
                 onClick={fullscreen.toggle}
@@ -2006,14 +1878,17 @@ export function App() {
                     ? "Download original PDF"
                     : "Print or save as PDF"
                 }
-                onClick={() =>
-                  engine?.format === "pdf" && active
-                    ? download(
-                        active.blob,
+                onClick={safe(async () => {
+                  if (engine?.format === "pdf" && active) {
+                    const source =
+                      openedBook.current || (await getBook(active.id));
+                    if (source)
+                      download(
+                        source.blob,
                         active.fileName || `${active.title}.pdf`,
-                      )
-                    : setModal("print")
-                }
+                      );
+                  } else setModal("print");
+                })}
               >
                 <Icon name={engine?.format === "pdf" ? "download" : "print"} />
               </button>
@@ -2596,6 +2471,23 @@ export function App() {
           </div>
         </>
       )}
+      {databaseState !== "ready" && databaseState !== "opening" && (
+        <div className="database-notice" role="alert">
+          <p>
+            {databaseState === "blocked"
+              ? "Close other Folio tabs to finish updating your library. Your files and notes are preserved."
+              : databaseState === "reload"
+                ? "The library was updated in another tab. Reload this tab before continuing."
+                : "The library update could not finish. Existing records have not been cleared. Free storage if necessary, then reload to retry."}
+          </p>
+          <button
+            className="button secondary"
+            onClick={() => window.location.reload()}
+          >
+            Reload Folio
+          </button>
+        </div>
+      )}
       {busy && !selectedId && (
         <div className="busy-banner" role="status">
           <span className="spinner" />
@@ -2866,7 +2758,8 @@ export function App() {
         <Modal title="Storage & backup" onClose={closeModal}>
           <p>
             Your books and notes are stored in this browser. A backup includes
-            original files, reading positions, annotations and OCR notes.
+            original files, reading positions, annotations and previously saved
+            text.
           </p>
           <p role="status">
             {storage?.persistent
@@ -2945,7 +2838,7 @@ export function App() {
           <p>
             This removes the local copy of{" "}
             <strong>{books.find((b) => b.id === deleteId)?.title}</strong> and
-            its bookmarks, highlights, and OCR notes. Your original file is
+            its bookmarks, highlights, and saved notes. Your original file is
             unchanged.
           </p>
           <div className="modal-actions">
@@ -3021,8 +2914,8 @@ export function App() {
               ? "DjVu printing creates a raster copy of the current page. "
               : ""}
             Print pagination may differ from the reading view. Large image-heavy
-            books are best printed chapter by chapter. Highlights and OCR text
-            layers are not included in this version.
+            books are best printed chapter by chapter. Highlights and saved
+            notes are not included in this version.
           </p>
           {!!printReview.length && (
             <div className="print-review" role="status">
@@ -3050,12 +2943,15 @@ export function App() {
             {engine?.format === "djvu" && active && (
               <Button
                 kind="secondary"
-                onClick={() =>
-                  download(
-                    active.blob,
-                    active.fileName || `${active.title}.djvu`,
-                  )
-                }
+                onClick={safe(async () => {
+                  const source =
+                    openedBook.current || (await getBook(active.id));
+                  if (source)
+                    download(
+                      source.blob,
+                      active.fileName || `${active.title}.djvu`,
+                    );
+                })}
               >
                 Download original DjVu
               </Button>
@@ -3071,115 +2967,11 @@ export function App() {
           </div>
         </Modal>
       )}
-      {modal === "ocr" && (
-        <Modal title="Find the words in an image" onClose={closeModal}>
-          <p>
-            Recognize printed English text locally. Nothing is uploaded, and
-            your original book is unchanged.
-          </p>
-          {rendered?.images.length ? (
-            <>
-              <label className="field-label" htmlFor="ocr-image">
-                IMAGE IN THIS CHAPTER
-              </label>
-              <select
-                className="text-input"
-                id="ocr-image"
-                value={ocrImage}
-                disabled={ocrBusy}
-                onChange={(e) => setOcrImage(Number(e.target.value))}
-              >
-                {rendered.images.map((im, i) => (
-                  <option key={i} value={i}>
-                    {i + 1}. {im.name}
-                  </option>
-                ))}
-              </select>
-              <img
-                className="ocr-preview"
-                src={rendered.images[ocrImage]?.src}
-                alt="Selected page for text recognition"
-              />
-              {ocrProgress && (
-                <p className="ocr-status" role="status">
-                  {ocrBusy && <span className="spinner" />}
-                  {ocrProgress}
-                </p>
-              )}
-              {ocrText && (
-                <>
-                  <textarea
-                    className="ocr-result"
-                    aria-label="Recognized text"
-                    value={ocrText}
-                    onChange={(e) => setOcrText(e.target.value)}
-                  />
-                  <p className="fine-print">
-                    Model confidence: {ocrConfidence?.toFixed(0)}%. Check the
-                    text for recognition errors. A derivative OCR note was saved
-                    locally.
-                  </p>
-                </>
-              )}
-              <p className="fine-print">
-                Best for clean, printed pages. Handwriting and other languages
-                are not supported in this version.
-              </p>
-              <div className="modal-actions">
-                {ocrNoteId && (
-                  <Button
-                    kind="secondary"
-                    disabled={ocrBusy}
-                    onClick={safe(async () => {
-                      await db.ocr.update(ocrNoteId, { text: ocrText });
-                      setOcrProgress("Your edits were saved on this device.");
-                    })}
-                  >
-                    Save edits
-                  </Button>
-                )}
-                {ocrText && (
-                  <Button
-                    kind="secondary"
-                    onClick={() =>
-                      download(
-                        new Blob([ocrText], { type: "text/plain" }),
-                        "recognized-text.txt",
-                      )
-                    }
-                  >
-                    <Icon name="download" size={17} />
-                    Save text
-                  </Button>
-                )}
-                <Button kind="secondary" onClick={closeModal}>
-                  {ocrBusy ? "Cancel recognition" : "Close"}
-                </Button>
-                <Button onClick={() => void startOCR()} disabled={ocrBusy}>
-                  {ocrBusy ? "Recognizing…" : "Recognize text"}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="empty">
-              <Icon name="scan" size={35} />
-              <h3>No images in this chapter</h3>
-              <p>
-                This chapter already contains selectable text. Open an
-                image-based chapter to use OCR.
-              </p>
-              <Button kind="secondary" onClick={closeModal}>
-                Back to reading
-              </Button>
-            </div>
-          )}
-        </Modal>
-      )}
     </div>
   );
 }
 
-function bookProgress(book: Book) {
+function bookProgress(book: BookMetadata) {
   if (book.format === "pdf" || book.format === "djvu")
     return Math.round((100 * book.chapter) / Math.max(1, book.chapterCount));
   if (!book.page || !book.pageCount || book.chapter >= book.chapterCount)

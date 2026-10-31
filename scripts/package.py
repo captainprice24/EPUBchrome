@@ -7,7 +7,7 @@ manifest=json.loads((root/'manifest.json').read_text())
 assert manifest['manifest_version']==3
 assert manifest['action']['default_title']=='Open Folio'
 assert (root/'reader.html').is_file()
-assert (root/'ocr/lang/eng.traineddata.gz').is_file()
+assert not (root/'ocr').exists()
 output=Path('.output')/('folio-'+manifest['version']+'-chrome.zip')
 with ZipFile(output,'w',ZIP_DEFLATED) as z:
  for f in sorted(root.rglob('*')):

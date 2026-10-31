@@ -7,7 +7,7 @@ export default defineConfig({
     return {
       name: "Folio — Private book library",
       description:
-        "Your private EPUB-first book library, with MOBI books and PDF, DjVu and Markdown documents. Notes, fullscreen and local OCR.",
+        "A private EPUB-first book library with MOBI, PDF, DjVu and Markdown support, bookmarks, highlights and fullscreen reading.",
       version,
       action: { default_title: "Open Folio" },
       permissions: [

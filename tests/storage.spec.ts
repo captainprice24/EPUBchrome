@@ -43,7 +43,7 @@ async function rejectBlobs(page: Page, initially = true) {
       ) {
         if (
           Reflect.get(window, "rejectBookBlobs") &&
-          this.name === "books" &&
+          ["books", "files", "previews"].includes(this.name) &&
           ["blob", "cover", "prepared"].some(
             (field) => value[field] instanceof Blob,
           )
@@ -73,11 +73,19 @@ async function savedRecords(page: Page) {
         const request = indexedDB.open("folio-library");
         request.onsuccess = () => {
           const db = request.result,
-            tx = db.transaction("books"),
-            rows = tx.objectStore("books").getAll();
+            tx = db.transaction(["library", "files", "previews"]),
+            rows = tx.objectStore("library").getAll(),
+            files = tx.objectStore("files").getAll(),
+            previews = tx.objectStore("previews").getAll();
           tx.oncomplete = () => {
             db.close();
-            resolve(rows.result);
+            resolve(
+              rows.result.map((row) => ({
+                ...row,
+                ...files.result.find((file) => file.id === row.id),
+                ...previews.result.find((preview) => preview.id === row.id),
+              })),
+            );
           };
           tx.onerror = () => reject(tx.error);
         };
@@ -252,7 +260,7 @@ for (const failurePoint of [
   "during reading",
   "during legacy migration",
 ] as const) {
-  test(`native-Blob library recovers when storage starts rejecting files ${failurePoint}`, async ({
+  test(`metadata saves never rewrite native files when storage starts rejecting blobs ${failurePoint}`, async ({
     page,
   }) => {
     await rejectBlobs(page, false);
@@ -273,8 +281,8 @@ for (const failurePoint of [
             const request = indexedDB.open("folio-library");
             request.onsuccess = () => {
               const db = request.result,
-                tx = db.transaction(["books", "marks"], "readwrite");
-              for (const name of ["books", "marks"]) {
+                tx = db.transaction(["library", "marks"], "readwrite");
+              for (const name of ["library", "marks"]) {
                 const store = tx.objectStore(name),
                   cursor = store.openCursor();
                 cursor.onsuccess = () => {
@@ -282,7 +290,7 @@ for (const failurePoint of [
                   if (!item) return;
                   const value = item.value;
                   delete value.locator;
-                  if (name === "books") value.rendererVersion = 0;
+                  if (name === "library") value.rendererVersion = 0;
                   item.update(value);
                   item.continue();
                 };
@@ -314,10 +322,8 @@ for (const failurePoint of [
       frame(page).getByRole("heading", { name: "The shape of a place" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Bookmark", exact: true }).click();
-    await expect
-      .poll(async () => (await savedRecords(page))[0]!.blob.folioBinary)
-      .toBe(1);
-    expect((await savedRecords(page))[0]!.cover!.folioBinary).toBe(1);
+    expect((await savedRecords(page))[0]!.blob.folioBinary).toBeUndefined();
+    expect((await savedRecords(page))[0]!.cover!.folioBinary).toBeUndefined();
     await page.getByRole("button", { name: "Back to library" }).click();
     await page.reload();
     await page.evaluate(() => Reflect.set(window, "rejectBookBlobs", true));

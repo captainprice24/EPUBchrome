@@ -62,7 +62,7 @@ test("large EPUB chapters survive failing sliced Blob streams and arrayBuffer re
       ) {
         if (
           sessionStorage.getItem("fail-blob-reads") &&
-          this.name === "books" &&
+          ["books", "files", "previews"].includes(this.name) &&
           ["blob", "cover", "prepared"].some(
             (field) => value[field] instanceof Blob,
           )
@@ -161,7 +161,7 @@ for (const storage of ["native Blob", "byte chunks"] as const) {
             key?: IDBValidKey,
           ) {
             if (
-              this.name === "books" &&
+              ["books", "files", "previews"].includes(this.name) &&
               ["blob", "cover", "prepared"].some(
                 (f) => value[f] instanceof Blob,
               )
@@ -199,8 +199,8 @@ for (const storage of ["native Blob", "byte chunks"] as const) {
           const request = indexedDB.open("folio-library");
           request.onsuccess = () => {
             const db = request.result,
-              tx = db.transaction("books", "readwrite"),
-              store = tx.objectStore("books"),
+              tx = db.transaction("files", "readwrite"),
+              store = tx.objectStore("files"),
               get = store.getAll();
             let id = "";
             get.onsuccess = () => {

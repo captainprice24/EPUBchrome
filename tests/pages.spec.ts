@@ -46,39 +46,6 @@ test("Pages subpath loads the reader, sample, persistent notes and extension dow
   );
   expect(failures).toEqual([]);
 });
-test("Pages OCR finds its packaged worker and model under the repository prefix", async ({
-  page,
-  context,
-}) => {
-  const image = await context.newPage();
-  await image.setContent(
-    '<div style="font:bold 42px Arial;display:inline-block;background:white;color:black;padding:20px">READING IS A JOY</div>',
-  );
-  await image
-    .locator("div")
-    .screenshot({ path: "test-results/pages-scan.png" });
-  await image.close();
-  execFileSync("python3", [
-    "scripts/fixtures.py",
-    "test-results/pages-scan.png",
-  ]);
-  await page.goto("/EPUBchrome/");
-  await page
-    .getByLabel("Import document file")
-    .setInputFiles(path.resolve("test-results/fixtures/scan.epub"));
-  await expect(
-    page
-      .frameLocator('iframe[title="Book chapter"]')
-      .getByRole("heading", { name: "A scanned page" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Open OCR" }).click();
-  await page
-    .getByRole("button", { name: "Recognize text", exact: true })
-    .click();
-  await expect(
-    page.getByRole("textbox", { name: "Recognized text" }),
-  ).toHaveValue(/READING IS A JOY/, { timeout: 50000 });
-});
 test("web preview explains Drive limits and adapts to a narrow screen", async ({
   page,
 }) => {

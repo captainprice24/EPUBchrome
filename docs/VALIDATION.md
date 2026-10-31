@@ -1,4 +1,16 @@
-# Version 0.4 validation
+# Validation
+
+## Current scope: v0.5
+
+The OCR recognition suites were retired along with the feature. Legacy recognition text is explicitly covered by migration and backup/restore tests. The earlier development history below records tests performed in those earlier versions; it is not a list of current OCR capabilities.
+
+New storage regressions cover direct v1/v2 upgrades, native and byte-chunk originals, prepared-copy retention, unchanged original bytes in backups, restored bookmarks and legacy text, metadata-only library reads, shared source access during background counting, no file writes on position saves, failed-upgrade rollback/retry, blocked connections and reload guidance for stale tabs. A long-shelf regression checks lazy preview reads and offscreen URL release. See [storage boundaries](STORAGE.md).
+
+Local release checks passed: formatting, TypeScript, extension/Pages builds, ZIP integrity and required decoder/license assets, plus zero production dependency advisories. **63 unique reader scenarios and 5 Pages scenarios** passed across the full-suite and focused storage runs. The focused rerun corrected a test-fixture variable shadowing error; GitHub Actions repeats the full suite before deployment. The 0.5.0 extension ZIP is **3,955,866 bytes** (8,900,709 bytes unpacked), compared with approximately 21.5 MB compressed before OCR removal. No OCR worker/model or Tesseract licenses remain in the output.
+
+These tests do not measure physical iPhone peak memory or verify the unavailable 40.6 MB reported publication. Removing OCR reduces installed assets and removes recognition-worker allocations; it does not imply the old worker was running at startup.
+
+## Earlier validation history (v0.1–v0.4)
 
 The production UI is exercised in Chromium using a local test server, with the same script/worker WASM CSP as the extension manifest. The environment administrator blocks unpacked extension loading, so toolbar startup, extension-origin permissions and real Google OAuth require a separate Chrome smoke test.
 
@@ -30,7 +42,7 @@ A separate three-test browser suite exercises the production web build at `/EPUB
 
 Four additional browser scenarios use an 80-paragraph EPUB chapter. They verify multi-page horizontal layout and counts, page turns without chapter jumps, exact page restoration after reopening, background chapter counts and book totals, reflow with a preserved passage, persistent font/theme/direction settings, multiple page bookmarks in one chapter, keyboard crossing of chapter boundaries, swipe turns, resize-driven repagination and narrow-screen layout. The original annotation/OCR/print tests remain in place and use the new page viewport where relevant.
 
-The full suite now contains 57 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
+The v0.4.7 suite contained 57 reader tests and 6 Pages tests. Pagination is viewport- and preference-dependent, not a publisher page-number guarantee. Linked publisher CSS, local imports and an embedded font are now tested; broader publisher CSS and native fixed-layout conformance remain open.
 
 ## Audit regressions
 

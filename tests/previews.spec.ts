@@ -170,7 +170,7 @@ test("old documents gain previews under Blob-rejecting storage without changing 
         key?: IDBValidKey,
       ) {
         if (
-          this.name === "books" &&
+          ["books", "files", "previews"].includes(this.name) &&
           ["blob", "cover", "prepared"].some(
             (field) => value[field] instanceof Blob,
           )
@@ -196,14 +196,15 @@ test("old documents gain previews under Blob-rejecting storage without changing 
         const request = indexedDB.open("folio-library");
         request.onsuccess = () => {
           const db = request.result,
-            tx = db.transaction("books", "readwrite"),
-            store = tx.objectStore("books"),
+            tx = db.transaction(["library", "previews"], "readwrite"),
+            store = tx.objectStore("library"),
             cursor = store.openCursor();
           cursor.onsuccess = () => {
             const row = cursor.result;
             if (row) {
               const value = row.value;
-              delete value.cover;
+              value.hasCover = false;
+              tx.objectStore("previews").delete(value.id);
               delete value.previewVersion;
               row.update(value);
               row.continue();

@@ -21,7 +21,6 @@ const paths: Record<string, string[]> = {
   more: ["M5 12h.01M12 12h.01M19 12h.01"],
   check: ["m5 12 4 4L19 6"],
   print: ["M6 9V3h12v6M6 17H3V9h18v8h-3M6 14h12v7H6z"],
-  scan: ["M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M7 9h10M7 13h10M7 17h6"],
   sun: [
     "M12 3V1m0 22v-2M3 12H1m22 0h-2M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2",
     "M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0",

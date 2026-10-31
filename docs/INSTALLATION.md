@@ -2,7 +2,7 @@
 
 ## Build from source
 
-Prerequisites: Node.js 24.x, npm, Python 3 available as `python3`, Git, and `curl`. Linux and macOS can run the commands in a terminal; Windows contributors should use WSL for this build toolchain. Windows and macOS users can load a previously built extension in their native Chrome browser.
+Prerequisites: Node.js 24.x, npm, Python 3 available as `python3`, and Git. Linux and macOS can run the commands in a terminal; Windows contributors should use WSL for this build toolchain. Windows and macOS users can load a previously built extension in their native Chrome browser.
 
 ```sh
 git clone https://github.com/captainprice24/EPUBchrome.git
@@ -12,7 +12,7 @@ npm run typecheck
 npm run build
 ```
 
-`npm ci` installs the pinned lockfile, copies the pinned OCR worker and engine, downloads the English language model when absent, checks its digest, and generates the original sample EPUB. An Internet connection is required for the initial install. Subsequent local reading and OCR work offline.
+`npm ci` installs the pinned lockfile, copies local PDF/DjVu decoder assets and generates the original sample EPUB. An Internet connection is required for the initial install. Subsequent local reading works offline. No OCR engine or language model is downloaded.
 
 In Chrome, open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `.output/chrome-mv3`. Pin Folio to the toolbar and click its icon. Managed browsers may prohibit unpacked extensions; use an allowed development browser rather than changing an organization’s policy.
 
@@ -32,7 +32,7 @@ The library keeps an unchanged copy of each original book. Importing an identica
 
 ## Export notes
 
-From the library footer, choose **Export notes**. The JSON file includes book identities, bookmarks, highlights and OCR records. It does not contain the original EPUB bytes. Use **Storage & backup → Restore / import notes** to merge it back into matching books. New exports include content hashes; older exports need the original library IDs.
+From the library footer, choose **Export notes**. The JSON file includes book identities, bookmarks, highlights and previously saved recognition text. It does not contain the original EPUB bytes. Use **Storage & backup → Restore / import notes** to merge it back into matching books. New exports include content hashes; older exports need the original library IDs.
 
 ## Print or save a PDF
 
@@ -40,13 +40,11 @@ Open a book, select the printer icon, choose **Current chapter** or **Whole book
 
 The layout uses selectable text and the original available images. Review page size, margins, headers/footers, fonts and the resulting PDF. Reading-view pagination and printed pagination can differ. Print preparation stops when chapter image/style resources cannot be loaded safely. Use individual chapters for image-heavy books.
 
-This is browser printing, not an automated EPUB-to-PDF conversion engine. Highlights and OCR text layers are not embedded in the exported PDF. Pixel-identical output, PDF/A, PDF/UA and font-embedding rights are not guaranteed.
+This is browser printing, not an automated EPUB-to-PDF conversion engine. Highlights and additional recognition text layers are not embedded in the exported PDF. Pixel-identical output, PDF/A, PDF/UA and font-embedding rights are not guaranteed.
 
-## Recognize printed text
+## Scanned documents
 
-Open a chapter that contains an image, select the scan icon, choose the image, and click **Recognize text**. Recognition uses the packaged English model on your device. You can cancel recognition and download the result as a text file. The latest result for the chapter can be reopened in the OCR dialog; records are stored separately from the EPUB.
-
-Review every result for errors. Model confidence is an engine estimate, not a calibrated accuracy guarantee. Handwriting, other languages, batch recognition and automatic searchable-PDF text layers are not supported in v0.3. Use **Save edits** to update the saved OCR result for the selected image; **Save text** downloads a text file. Results are associated with individual images, not just chapters.
+Scanned PDF/DjVu pages remain readable as images. Selection and search use text already embedded in a document. New OCR recognition was removed in v0.5; existing recognition records are retained for notes export and backup/restore.
 
 ## Package or update
 
@@ -54,7 +52,9 @@ Review every result for errors. Model confidence is an engine estimate, not a ca
 npm run package
 ```
 
-The generated `.output/folio-0.4.7-chrome.zip` contains the production extension and local OCR assets. Extract it before using **Load unpacked**. The source ZIP from GitHub must be built first.
+The generated `.output/folio-0.5.0-chrome.zip` contains the production extension and packaged document decoders. Extract it before using **Load unpacked**. The source ZIP from GitHub must be built first.
+
+The v0.5 storage upgrade preserves existing originals and IDs while adding a small catalogue and separate previews. Close other Folio tabs if asked, then reload. Failed upgrades roll back without clearing records; retry after resolving the cause. See [storage and upgrades](STORAGE.md).
 
 After updating source, run `npm ci` and `npm run build`, then click **Reload** for Folio in `chrome://extensions`. Keep the extension ID and Chrome profile stable to preserve the same local storage and OAuth configuration.
 
@@ -62,19 +62,16 @@ After updating source, run `npm ci` and `npm run build`, then click **Reload** f
 
 | Symptom | What to check |
 | --- | --- |
-| Installation cannot download the OCR model | Confirm Internet access to npm and `raw.githubusercontent.com`, Python 3 and `curl`; retry `npm ci`. Do not disable TLS or the model integrity check. |
-| The model checksum fails | Delete `public/ocr/lang/eng.traineddata.gz` and rerun `npm run prepare:assets`. A changed upstream model must be investigated rather than accepted with a new checksum blindly. |
 | No extension appears after loading a ZIP | Extract the build ZIP and select its folder, which must contain `manifest.json`. A GitHub source ZIP needs `npm ci` and `npm run build` first. |
 | Chrome blocks development extensions | The browser may be managed. Use a permitted development browser. |
 | Google Drive is not configured | Follow [the Drive guide](GOOGLE_DRIVE.md), rebuild and reload. Local files need no Google account. |
 | A large book cannot be imported | Check browser storage/quota and the limits below. Remove an unused local copy if needed; retain originals. |
 | A chapter image or style is unavailable | The file may refer to absent, external or oversized resources. External book resources are intentionally blocked. |
-| No images appear in OCR | OCR works on image-based content; ordinary text chapters are already selectable. Advanced SVG content is not a guaranteed OCR input. |
 | Notes are missing | Check that you are using the same Chrome profile and extension ID. Clearing browser data or uninstalling can remove local data. |
 
 ## Current limits
 
-| Area | v0.4 behavior |
+| Area | v0.5 behavior |
 | --- | --- |
 | Input | EPUB/PDF/DjVu: 1 GB; MOBI: 64 MB; Markdown: 16 MB. DRM-free, with format-specific limits in [FORMATS.md](FORMATS.md) |
 | ZIP | At most 30,000 entries, 2 GB declared expanded size, 64 MB per extracted entry; suspicious compression and unsafe paths rejected |
@@ -82,14 +79,13 @@ After updating source, run `npm ci` and `npm run build`, then click **Reload** f
 | Rendering | Horizontal pages or vertical reading; native fixed-layout viewport fidelity, advanced SVG/media, scripted content and some CSS import forms remain incomplete or unsupported |
 | Page numbers | Publisher page lists when supplied; no invented universal page count for reflowable books |
 | Print | At most 300 chapters and 16 MB assembled markup; actual decoded image memory may be much larger |
-| OCR | Printed English, under 40 megapixels per image; review results manually |
 | Local persistence | IndexedDB in one browser profile; persistent-storage request, local backup/restore, no account sync |
 
 See [validation coverage](VALIDATION.md) for the tests performed and pending compatibility/performance work.
 
 ## Back up or move your library
 
-In the library footer open **Storage & backup**. Check protection status and storage usage, then choose the entire library or an individual book and select **Back up library**. The downloaded `.folio` file contains original documents, covers, reading positions, annotations and OCR. It is not encrypted. Keep it somewhere safe.
+In the library footer open **Storage & backup**. Check protection status and storage usage, then choose the entire library or an individual book and select **Back up library**. The downloaded `.folio` file contains original documents, covers, reading positions, annotations and any previously saved recognition text. It is not encrypted. Keep it somewhere safe.
 
 Choose **Restore / import notes** and select a `.folio` file on the destination device/profile. Restore accepts archives below 2 GB, verifies book checksums and merges matching books without replacing existing notes or reading positions. Large libraries can be backed up one book at a time. The extension and Pages preview have separate libraries; a backup can transfer data between them. Persistence protects against automatic eviction where granted, but cannot prevent deliberate data clearing or uninstall loss.
 

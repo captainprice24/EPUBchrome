@@ -5,8 +5,8 @@ All reading happens locally. Imported originals are stored unchanged, fingerprin
 | Format | Reading and navigation | Notes and limitations |
 | --- | --- | --- |
 | EPUB | Reflowing chapters, publisher CSS/fonts, TOC/page lists, horizontal/vertical reading, text settings | Existing archive limits apply. Native fixed-layout EPUB and vertical CJK conformance remain unfinished. |
-| PDF | Original pages, on-demand Blob ranges, page slider, outlines/internal destinations when present, zoom | Embedded text supports selection/search/highlights. Scans remain images and can use local OCR. Password-protected PDFs are rejected clearly; forms, PDF scripts, attachments and external actions are not executed. Downloading the original preserves its exact bytes. |
-| DjVu / `.djv` | Original pages, local WASM worker, colour IW44 and bilevel JB2, zoom and page navigation | Bundled/single-file documents only. Below/equal 64 MB the decoder exposes an embedded text layer when present. Larger files use Blob ranges; that API does not expose embedded text, so reading/OCR and physical-page bookmarks remain available. Indirect documents requiring companion files are not supported. |
+| PDF | Original pages, on-demand Blob ranges, page slider, outlines/internal destinations when present, zoom | Embedded text supports selection/search/highlights. Scans remain images; no new OCR recognition is performed. Password-protected PDFs are rejected clearly; forms, PDF scripts, attachments and external actions are not executed. Downloading the original preserves its exact bytes. |
+| DjVu / `.djv` | Original pages, local WASM worker, colour IW44 and bilevel JB2, zoom and page navigation | Bundled/single-file documents only. Below/equal 64 MB the decoder exposes an embedded text layer when present. Larger files use Blob ranges; that API does not expose embedded text, so image reading and physical-page bookmarks remain available. Indirect documents requiring companion files are not supported. |
 | MOBI | DRM-free MOBI6/PalmDOC, with a separate KF8/hybrid parser; metadata, sections, images and existing reflow tools | Declared encryption is rejected. The parser runs in a disposable worker; it is not a Kindle-library or DRM-removal integration. Legacy byte-position links fall back to their containing section if an exact target is unavailable. KF8/hybrid and unusual books need broader corpus testing. |
 | Markdown | UTF-8 `.md`/`.markdown`, heading navigation, GFM tables/fenced code, sanitized HTML | Standalone files only. Local-relative/external image dependencies are not imported or fetched; external resource requests remain blocked. Front-matter metadata, Mermaid execution, workspace editing and folder bundles are not implemented. |
 
@@ -60,7 +60,7 @@ If the browser cannot read a saved source through either API, the reader keeps a
 
 ## Backups and originals
 
-Folio 0.4 writes `.folio` **version 2** backups containing original files, declared formats, names, positions, annotations, OCR and covers. Derived reading caches are omitted and rebuilt on restore. It also restores **version 1** EPUB-only backups. Older Folio builds cannot read version 2 archives; update the destination before restoring.
+Folio 0.5 writes `.folio` **version 2** backups containing original files, declared formats, names, positions, annotations, previously saved recognition text and covers. Derived reading caches are omitted and rebuilt on restore. It also restores **version 1** EPUB-only backups. Older Folio builds cannot read version 2 archives; update the destination before restoring.
 
 PDF download is an unchanged original, not a regenerated document. Reflowing books can use the existing browser print-to-PDF flow. DjVu print output is a raster derivative of the current page, without an embedded OCR layer; it is not a lossless vector conversion. Backups are unencrypted and must be protected by their owner.
 

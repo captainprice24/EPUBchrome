@@ -2,7 +2,7 @@
 
 Configured address: **https://captainprice24.github.io/EPUBchrome/**.
 
-The repository builds a standalone web edition of the same React reader. It is intended for testing local EPUB/PDF/DjVu/MOBI/Markdown import, sample reading, chapter navigation, bookmarks, highlights, printed-English OCR and Chrome PDF printing without loading an unpacked extension. It also includes a downloadable ZIP of the extension, plus loading instructions.
+The repository builds a standalone web edition of the same React reader. It is intended for testing local EPUB/PDF/DjVu/MOBI/Markdown import, sample reading, chapter navigation, bookmarks, highlights and Chrome PDF printing without loading an unpacked extension. It also includes a downloadable ZIP of the extension, plus loading instructions.
 
 ## Automatic deployment
 
@@ -19,7 +19,7 @@ GitHub Pages availability depends on repository visibility and the account's pla
 
 ## What differs from the extension
 
-- Books, notes and OCR results remain in the browser; the web library is separate from extension storage. GitHub Pages content is public, but selected books are read locally rather than uploaded.
+- Books, notes and previously saved recognition text remain in the browser; the web library is separate from extension storage. GitHub Pages content is public, but selected books are read locally rather than uploaded.
 - Storage is scoped to the website's origin. Other pages under the same GitHub Pages origin share that browser security boundary. Keep originals and export notes before clearing browser data.
 - Google Drive uses Chrome extension identity APIs and is unavailable in the web preview. The preview explains this rather than attempting a non-working sign-in.
 - PDF originals download unchanged; reflowing documents and current-page DjVu output use the browser's print dialog. Browser support and formatting can vary; Chrome is the primary test target.
@@ -35,6 +35,8 @@ npm run test:pages
 npm run preview:pages
 ```
 
-The local server serves the site on port 4174 under `/EPUBchrome/`, matching GitHub Pages rather than testing only at the domain root. The output is `.output/pages`. Vite rewrites JavaScript/CSS paths; the runtime asset helper uses the same base for the EPUB sample, OCR worker/model, PDF worker/fonts/CMaps, DjVu WASM and extension download.
+The local server serves the site on port 4174 under `/EPUBchrome/`, matching GitHub Pages rather than testing only at the domain root. The output is `.output/pages`. Vite rewrites JavaScript/CSS paths; the runtime asset helper uses the same base for the EPUB sample, PDF worker/fonts/CMaps, DjVu WASM and extension download.
 
 Changing the repository or Pages path requires updating `vite.web.config.ts`, the local server prefix, the Pages tests and documentation links together. No custom domain is configured.
+
+Version 0.5 removes OCR and upgrades the local catalogue without rewriting originals. The upgrade may ask you to close another Folio tab; reload an older open tab after the upgrade. [Storage details](STORAGE.md).

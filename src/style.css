@@ -1328,33 +1328,6 @@ a {
   width: 23px;
   height: 23px;
 }
-.ocr-preview {
-  display: block;
-  max-width: 100%;
-  height: 130px;
-  object-fit: contain;
-  margin: 18px auto;
-  background: var(--surface);
-  border-radius: 5px;
-}
-.ocr-result {
-  width: 100%;
-  min-height: 140px;
-  padding: 13px;
-  border: 1px solid #dce3d0;
-  background: var(--surface);
-  border-radius: 5px;
-  line-height: 1.7;
-  font:
-    13px Georgia,
-    serif;
-  resize: vertical;
-}
-.ocr-status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 .tag {
   border: 1px solid #d4ddc7;
   font-size: 12px;
@@ -2455,5 +2428,24 @@ a {
 .print-review ul {
   padding-left: 20px;
   font-size: 13px;
+  line-height: 1.6;
+}
+
+.database-notice {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 32px;
+  background: var(--surface);
+  color: var(--text-primary);
+  text-align: center;
+}
+.database-notice p {
+  max-width: 480px;
   line-height: 1.6;
 }

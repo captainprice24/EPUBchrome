@@ -79,9 +79,9 @@ export async function migrateLocators(book: Book, epub: Epub) {
     pagination: undefined,
   };
   await persistBookWrites(() =>
-    db.transaction("rw", db.books, db.marks, async () => {
+    db.transaction("rw", db.library, db.marks, async () => {
       for (const [id, update] of updates) await db.marks.update(id, update);
-      await db.books.update(book.id, update);
+      await db.library.update(book.id, update);
     }),
   );
   return { ...book, ...update };

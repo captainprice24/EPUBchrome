@@ -1,10 +1,19 @@
 # Response to the v0.4.5 re-audit
 
-**Review date:** 31 October 2026 · **Report:** [AUDIT_V2.md](AUDIT_V2.md), preserved from `13b7e53` · **Response implementation:** v0.4.7, following the independently shipped v0.4.6 file-reading fix.
+**Review date:** 31 October 2026 · **Report:** [AUDIT_V2.md](AUDIT_V2.md), preserved from `13b7e53` · **Response implementation:** v0.4.7 and v0.5.0, following the independently shipped v0.4.6 file-reading fix.
 
 The re-audit identifies real failures in printing, repeated-text highlights and malformed-XHTML recovery. Those take priority over new features. This response distinguishes implemented repairs, modified recommendations and work that remains open. It does not turn a passing Chromium suite into a claim of complete EPUB or iOS compatibility.
 
-## Implemented in this batch
+## Implemented
+
+The v0.5 follow-up completes the catalogue/file separation and removes OCR at the owner’s request. Earlier recommendations below retain their original context. See [storage and migration](STORAGE.md).
+
+| Follow-up | Result |
+| --- | --- |
+| **N-6: metadata/file separation** | Transactional schema v3 adds metadata, files and previews. Existing originals stay in place for read-on-demand access; the upgrade scans one row at a time without cloning the whole library. Position/category updates touch only metadata. Covers load near the viewport with an 8 MiB/24-entry cache; background counters reuse the selected file. Backup reads sources sequentially; restore remains validated and atomic. Migration rollback/retry and blocked/stale tabs have browser regressions. |
+| **N-7: bounded extraction (additional)** | Cover rendering/cache lifecycle moved into `Cover.tsx`; OCR state and worker lifecycle removed. The larger Reader/Library split and hooks lint baseline remain open. |
+
+## v0.4.7 repairs
 
 | Findings | Result and limits |
 | --- | --- |
@@ -30,17 +39,16 @@ The re-audit identifies real failures in printing, repeated-text highlights and 
 - **Do not add an ineffective PDF.js option.** The pinned PDF.js 6.4.299 API and implementation no longer expose `isEvalSupported`; TypeScript rejects it. The existing CSP also excludes `unsafe-eval`. Supported options are explicit. `maxImageSize: -1` deliberately preserves embedded images rather than silently omitting large ones; the canvas budget is not a claim of bounded embedded-image decoding. A stronger image limit needs visible omission reporting and malformed-input tests first.
 - **A full MOBI fork is not needed to fix silent patch failures.** The script already threw on a missing original/patched pattern. Exact occurrence checks strengthen that behavior without creating a fork to maintain. Changes to the pinned dependency still require review.
 - **A startup Blob probe cannot replace later recovery.** The reported failures can start after successful import or affect only larger/ranged reads. v0.4.6 added bounded EPUB/backup reads, direct reads of stored chunks, a FileReader fallback and same-original repair. Message-based write-error recognition remains imperfect. v0.4.7 shares the fallback with byte conversion, orders book metadata writes within a tab so retries cannot overtake newer positions, and waits for pending saves before returning to the library. Reflowed chapter positions are committed with successful pagination; native PDF/DjVu navigation can immediately save a coherent original page index, even before rasterization finishes. A future structured capability probe should be an additional hint, with typed-byte control writes and quota/error tests, not a reason to stop handling later failures.
-- **Keep offline OCR; measure before removing variants.** The audit accepts the offline model policy. Reducing redundant cores is reasonable only after checking which loader/core combinations the supported browsers require. No arbitrary bundle pruning or new download dependency was introduced.
+- **OCR decision superseded in v0.5.** v0.4.7 retained the offline engine. The owner subsequently asked to remove OCR to reduce resource use, so v0.5 removes the complete recognition feature and its dependency/assets rather than pruning untested core combinations. Previously saved recognition text is retained for export/backup/restore. No network replacement was added.
 
 ## Open work, in priority order
 
-1. **N-6: metadata/file separation.** This is the next durability/performance priority. A library refresh currently materializes every byte-backed book, including originals and prepared copies. Split metadata from binary/previews with an additive, transactional migration, preserved IDs, legacy reads, stale-tab/version-change handling and native/byte-storage backup/restore tests. No risky schema migration was mixed into the urgent read/annotation/print fixes.
-2. **N-8 and R-7: search and navigation.** Add next/previous match navigation and cross-node matching first, then bounded whole-document/book search with snippets. Add reload/Back/deep-link behavior and single extension-tab reuse. Progressive pagination and inferred heading lists require separate correctness/performance work; they must not invent section structure or unstable page/annotation positions.
-3. **N-7: lint and component boundaries.** Introduce a reviewed React-hooks lint baseline, then extract Library/Reader views and document/annotation lifecycle hooks. Do not perform a large mechanical rewrite while changing data behavior, or blanket-disable dependency rules to claim completion.
-4. **R-6 and N-8: annotation and section workflow.** Use navigation entries near the visible passage instead of pretending every spine file is a semantic chapter. Add stable bookmark descriptions, highlight colors, notes/editing and Markdown export. Existing ambiguous notes need an explicit manual reattachment workflow, not guessed moves.
-5. **N-9: parser hardening evidence.** Add bounded malformed PDF/DjVu/MOBI fixtures and broader real-publication tests, including vertical CJK and fixed-layout limitations. Keep the preview iframe/CSP and no-external-resource boundary. Automatic fuzzing and physical-device coverage are not provided by this batch.
-6. **N-3: DjVu page ranges.** Add multi-page raster output only with a byte/pixel budget and cancellation strategy that accounts for the browser retaining all printable images. A bounded rendering queue alone does not bound the final document's memory.
-7. **N-10/N-11 and design polish.** Add capability diagnostics, remove the redundant imported-sample card using identity rather than title matching, finish semantic design/type tokens, then consider tap zones, spreads and normal-mode chrome behavior. These remain open; the sample card and current type system were not presented as fixed.
+1. **N-8 and R-7: search and navigation.** Add next/previous match navigation and cross-node matching first, then bounded whole-document/book search with snippets. Add reload/Back/deep-link behavior and single extension-tab reuse. Progressive pagination and inferred heading lists require separate correctness/performance work; they must not invent section structure or unstable page/annotation positions.
+2. **N-7: lint and component boundaries.** Introduce a reviewed React-hooks lint baseline, then extract Library/Reader views and document/annotation lifecycle hooks. Do not perform a large mechanical rewrite while changing data behavior, or blanket-disable dependency rules to claim completion.
+3. **R-6 and N-8: annotation and section workflow.** Use navigation entries near the visible passage instead of pretending every spine file is a semantic chapter. Add stable bookmark descriptions, highlight colors, notes/editing and Markdown export. Existing ambiguous notes need an explicit manual reattachment workflow, not guessed moves.
+4. **N-9: parser hardening evidence.** Add bounded malformed PDF/DjVu/MOBI fixtures and broader real-publication tests, including vertical CJK and fixed-layout limitations. Keep the preview iframe/CSP and no-external-resource boundary. Automatic fuzzing and physical-device coverage are not provided by this batch.
+5. **N-3: DjVu page ranges.** Add multi-page raster output only with a byte/pixel budget and cancellation strategy that accounts for the browser retaining all printable images. A bounded rendering queue alone does not bound the final document's memory.
+6. **N-10/N-11 and design polish.** Add capability diagnostics, remove the redundant imported-sample card using identity rather than title matching, finish semantic design/type tokens, then consider tap zones, spreads and normal-mode chrome behavior. These remain open; the sample card and current type system were not presented as fixed.
 
 External-link handling, metadata editing, live Drive validation/scope/token improvements, broader library organization and accessibility testing remain open. No backend, account system, AI feature, subscription, project license choice or network-based reading workflow was added for this audit.
 
@@ -50,4 +58,4 @@ The new original fixtures reproduce named-entity/prefix recovery, self-closing s
 
 The [validation record](VALIDATION.md) records the full reader/Pages check results. The owner's seven EPUBs/five PDFs from the report were not available in this workspace and were not independently retested here. Physical iPhone behavior, screen readers, exhaustive EPUB/PDF conformance, complex large publications and print fidelity still need direct validation. No private publication was committed.
 
-Local validation passed: formatting, TypeScript, production extension/Pages builds, **57 reader tests and 6 Pages tests**, extension ZIP integrity/version/license checks and **0 production dependency advisories**. GitHub Actions repeats the checks before publishing; consult the run for remote deployment status.
+v0.4.7 validation passed 57 reader tests and 6 Pages tests. The v0.5 follow-up validates **63 unique reader scenarios and 5 Pages scenarios** across full/focused runs, formatting, TypeScript, production extension/Pages builds, ZIP integrity/version/decoder/license checks and **0 production dependency advisories**. The extension ZIP is 3,955,866 bytes, with 8,900,709 unpacked bytes and no OCR assets. See [validation](VALIDATION.md) for test-run detail and limits. GitHub Actions repeats the complete checks before publishing; consult the run for remote deployment status.

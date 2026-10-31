@@ -9,6 +9,9 @@ import {
 import {
   db,
   updateBook,
+  getBook,
+  addBook,
+  bookTables,
   type Book,
   type Mark,
   type OCRNote,
@@ -16,7 +19,7 @@ import {
 } from "./store";
 import { contentHash } from "./content-hash";
 import { storageStatus } from "./storage";
-import { persistBooks } from "./binary-storage";
+import { persistBookWrites } from "./binary-storage";
 import { LocalFileReader } from "./file-reading";
 import type { TextLocator } from "./locators";
 import { openDocument } from "./documents";
@@ -31,11 +34,11 @@ type BookInfo = Omit<Book, "blob" | "cover"> & {
 export async function backupLibrary(bookId?: string) {
   const snapshot = await db.transaction(
     "r",
-    db.books,
+    db.library,
     db.marks,
     db.ocr,
     async () => ({
-      books: await db.books.toArray(),
+      books: await db.library.toArray(),
       annotations: await db.marks.toArray(),
       ocr: await db.ocr.toArray(),
     }),
@@ -48,10 +51,7 @@ export async function backupLibrary(bookId?: string) {
     snapshot.ocr = snapshot.ocr.filter((n) => n.bookId === bookId);
   }
   if (
-    snapshot.books.reduce(
-      (size, b) => size + b.blob.size + (b.cover?.size || 0),
-      0,
-    ) >
+    snapshot.books.reduce((size, b) => size + b.size, 0) >
     2 * 1024 ** 3 - MAX_JSON
   )
     throw Error(
@@ -60,12 +60,23 @@ export async function backupLibrary(bookId?: string) {
   const writer = new ZipWriter(new BlobWriter("application/zip"));
   const books: BookInfo[] = [];
   try {
-    for (const [i, book] of snapshot.books.entries()) {
+    let sourceBytes = 0;
+    for (const [i, metadata] of snapshot.books.entries()) {
+      const source = await getBook(metadata.id, true);
+      if (!source) throw Error("The library changed during backup. Try again.");
+      const book = { ...source, ...metadata };
+      sourceBytes += book.blob.size + (book.cover?.size || 0);
+      if (sourceBytes > 2 * 1024 ** 3 - MAX_JSON)
+        throw Error(
+          "This library is too large for one backup. Choose individual books instead.",
+        );
       const {
         blob,
         cover,
         prepared: _prepared,
         preparedVersion: _preparedVersion,
+        hasCover: _hasCover,
+        archivedCover: _archivedCover,
         ...info
       } = book;
       const hash = book.contentHash || (await contentHash(blob));
@@ -250,13 +261,18 @@ export async function restoreLibrary(file: File) {
       throw Error("Unsupported Folio backup version.");
     const annotations = array(manifest.annotations).map(annotation),
       ocr = array(manifest.ocr).map(ocrNote);
-    const existing = await db.books.toArray(),
+    const existing = await db.library.toArray(),
       idMap = new Map<string, string>(),
       imported: Book[] = [];
     // Fingerprint older entries lazily; never load an entire large EPUB into RAM.
     for (const book of existing) {
       if (!book.contentHash) {
-        book.contentHash = await contentHash(book.blob);
+        const source = await getBook(book.id);
+        if (!source)
+          throw Error(
+            "A library file is unavailable. Repair it before importing notes.",
+          );
+        book.contentHash = await contentHash(source.blob);
         await updateBook(book.id, { contentHash: book.contentHash });
       }
     }
@@ -374,14 +390,14 @@ export async function restoreLibrary(file: File) {
     }
     // Validate the entire archive before this transaction. A failed restore never
     // leaves a half-restored library or overwrites newer local notes/positions.
-    const restoredBooks = await persistBooks(imported, () =>
-      db.transaction("rw", db.books, db.marks, db.ocr, async () => {
+    const restoredBooks = await persistBookWrites(() =>
+      db.transaction("rw", [...bookTables, db.marks, db.ocr], async () => {
         let restoredBooks = 0;
         // A second tab may have restored/imported the same file while we were
         // validating it. Recheck inside the write transaction before inserting.
         for (const book of imported) {
           const match = book.contentHash
-            ? await db.books
+            ? await db.library
                 .where("contentHash")
                 .equals(book.contentHash)
                 .first()
@@ -390,7 +406,7 @@ export async function restoreLibrary(file: File) {
             for (const note of [...annotations, ...ocr])
               if (note.bookId === book.id) note.bookId = match.id;
           } else {
-            await db.books.add(book);
+            await addBook(book);
             restoredBooks++;
           }
         }
@@ -401,7 +417,7 @@ export async function restoreLibrary(file: File) {
         for (const id of new Set(
           annotations.filter((m) => !m.locator).map((m) => m.bookId),
         ))
-          await db.books.update(id, { rendererVersion: undefined });
+          await db.library.update(id, { rendererVersion: undefined });
         return restoredBooks;
       }),
     );

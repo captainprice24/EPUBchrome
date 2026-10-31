@@ -110,8 +110,8 @@ test("v0.2 highlights migrate by quote and ambiguous passages stay visible for r
         const request = indexedDB.open("folio-library");
         request.onsuccess = () => {
           const db = request.result,
-            tx = db.transaction(["books", "marks"], "readwrite");
-          const books = tx.objectStore("books"),
+            tx = db.transaction(["library", "marks"], "readwrite");
+          const books = tx.objectStore("library"),
             marks = tx.objectStore("marks");
           const b = books.getAll();
           b.onsuccess = () => {
@@ -373,8 +373,8 @@ test("restoring the same backup in two tabs merges originals and keeps annotatio
           request.onerror = () => reject(request.error);
           request.onsuccess = () => {
             const db = request.result,
-              tx = db.transaction(["books", "marks"]),
-              books = tx.objectStore("books").getAll(),
+              tx = db.transaction(["library", "marks"]),
+              books = tx.objectStore("library").getAll(),
               marks = tx.objectStore("marks").getAll();
             tx.oncomplete = () => {
               const ids = new Set(
