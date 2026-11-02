@@ -132,20 +132,17 @@ test("print layout includes all chapters; library search and removal work", asyn
     page.getByRole("button", { name: "Read The Quiet Atlas" }),
   ).toHaveCount(0);
 });
-test("Drive entry explains unavailable sign-in in browser preview; layout fits a narrow screen", async ({
+test("Drive entry is hidden without an OAuth client; layout fits a narrow screen", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 650, height: 900 });
   await page.goto("/reader.html");
-  await page.getByRole("button", { name: "Open from Drive" }).click();
-  await page
-    .getByLabel("GOOGLE DRIVE FILE LINK")
-    .fill("https://drive.google.com/file/d/12345678901234567890/view");
-  await page.getByRole("button", { name: "Connect & open" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "installed Chrome extension",
-  );
-  await page.getByRole("button", { name: "Close dialog" }).click();
+  await expect(
+    page.getByRole("button", { name: "Import a book" }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open from Drive" }),
+  ).toHaveCount(0);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

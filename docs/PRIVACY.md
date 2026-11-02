@@ -1,5 +1,7 @@
 # Privacy and local data
 
+The public privacy policy for store users is published at https://captainprice24.github.io/EPUBchrome/privacy.html (source: `web/privacy.html`). This page gives the technical detail.
+
 Folio v0.5 stores imported document copies, reading positions, bookmarks, highlights and previously saved recognition records in IndexedDB in the current browser profile. Original files are not rewritten. Saved recognition records and annotations are separate from the original bytes. MOBI and Markdown also have a derived, local reading copy; the original remains unchanged. PDF and DjVu pages are decoded locally. No PDF JavaScript, interactive forms or embedded actions are executed by the reader.
 
 ## Network activity
@@ -14,7 +16,6 @@ Folio v0.5 stores imported document copies, reading positions, bookmarks, highli
 
 | Permission | Purpose |
 | --- | --- |
-| `storage` | Extension storage permission declared for the app; the current library itself uses IndexedDB |
 | `unlimitedStorage` | Reduce automatic storage eviction risk for the extension library; not a backup |
 | `identity` | Optional Google sign-in through Chrome’s identity API |
 | `https://www.googleapis.com/*` | Drive metadata and file downloads when import is requested |

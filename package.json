@@ -1,6 +1,6 @@
 {
   "name": "epubchrome",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,8 @@
     "build:pages": "npm run build && python3 scripts/package.py && vite build --config vite.web.config.ts --mode pages && node scripts/pages-assets.mjs",
     "test:pages": "playwright test --config playwright.pages.config.ts",
     "preview:pages": "node scripts/serve.mjs --pages",
+    "icons": "node scripts/icons.mjs",
+    "store:assets": "node scripts/store-assets.mjs",
     "format:check": "prettier --check src entrypoints tests scripts/*.mjs *.ts *.json"
   },
   "dependencies": {

@@ -97,6 +97,15 @@ class PdfDocument extends FixedDocument {
   private pdfWorker?: PDFWorker;
   private workerPort?: Worker;
   async open() {
+    // PDF.js 6 calls these ES2026 APIs directly; older engines fail mid-load.
+    if (
+      typeof Map.prototype.getOrInsertComputed !== "function" ||
+      typeof (Math as { sumPrecise?: unknown }).sumPrecise !== "function" ||
+      typeof Promise.try !== "function"
+    )
+      throw Error(
+        "PDF reading needs a newer browser. Update Chrome and try again. EPUB, MOBI, DjVu and Markdown files still open in this version.",
+      );
     const pdfjs = await import("pdfjs-dist");
     pdfjs.GlobalWorkerOptions.workerSrc = asset(
       "documents/pdf/pdf.worker.min.js",
@@ -163,7 +172,10 @@ class PdfDocument extends FixedDocument {
           title &&
           !/^Microsoft\s+Word\s*[-–:]/i.test(title) &&
           !/^untitled$/i.test(title) &&
-          !/\.docx?$/i.test(title)
+          !/\.(?:docx?|odt|rtf|pptx?|xlsx?|pdf)$/i.test(title) &&
+          // Browsers write the page URL (or about:blank) when printing an
+          // untitled web page to PDF.
+          !/^(?:about:|https?:\/\/|file:)/i.test(title)
         )
           this.title =
             title

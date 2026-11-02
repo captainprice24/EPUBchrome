@@ -52,7 +52,7 @@ Scanned PDF/DjVu pages remain readable as images. Selection and search use text 
 npm run package
 ```
 
-The generated `.output/folio-0.5.0-chrome.zip` contains the production extension and packaged document decoders. Extract it before using **Load unpacked**. The source ZIP from GitHub must be built first.
+The generated `.output/folio-0.5.1-chrome.zip` contains the production extension and packaged document decoders. Extract it before using **Load unpacked**. The source ZIP from GitHub must be built first.
 
 The v0.5 storage upgrade preserves existing originals and IDs while adding a small catalogue and separate previews. Close other Folio tabs if asked, then reload. Failed upgrades roll back without clearing records; retry after resolving the cause. See [storage and upgrades](STORAGE.md).
 

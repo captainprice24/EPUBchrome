@@ -6,7 +6,7 @@
 
 A private, **EPUB-first book library** for Chrome. Read EPUB and MOBI books, keep **PDF, DjVu and Markdown** in a separate Documents collection, and use fullscreen reading, bookmarks and highlights.
 
-![Version 0.5.0](https://img.shields.io/badge/version-0.5.0-385546)
+![Version 0.5.1](https://img.shields.io/badge/version-0.5.1-385546)
 ![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest_V3-70865b)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 [![Build and test](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml)
@@ -59,7 +59,7 @@ The library now loads a lightweight catalogue rather than every stored book. Ori
 | Backup and restore | Original books, positions, annotations and previously saved recognition text in a local `.folio` archive |
 | PDF and DjVu | On-demand original pages, zoom, embedded text selection where available, PDF outlines/internal links; lossless original PDF download |
 | PDF printing | Reflowing chapter/book through Chrome’s **Save as PDF**; current-page raster printing for DjVu |
-| Google Drive | File-link import after configuring a Google OAuth client; live-account validation pending |
+| Google Drive | File-link import after configuring a Google OAuth client; hidden in builds without one, including the store build; live-account validation pending |
 
 **This is an early development build.** Accurate native fixed-layout EPUB rendering, automated PDF conversion and verified very-large-book performance are still future work. Input ceilings are safety limits, not performance guarantees: 1 GB for EPUB/PDF/DjVu, 64 MB for MOBI and 16 MB for Markdown. Password-protected PDF and DRM-protected MOBI are not supported. See [current limits](docs/INSTALLATION.md#current-limits) and [validation coverage](docs/VALIDATION.md).
 
@@ -96,7 +96,7 @@ The app itself does not require a server or a Google account for local files.
 npm run package
 ```
 
-This creates `.output/folio-0.5.0-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
+This creates `.output/folio-0.5.1-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
 
 ### Develop and test
 
@@ -130,6 +130,8 @@ See the [privacy guide](docs/PRIVACY.md) for storage, permissions and data-loss 
 | --- | --- |
 | [Installation and troubleshooting](docs/INSTALLATION.md) | Loading the extension, printing, packaging and supported limits |
 | [Google Drive setup](docs/GOOGLE_DRIVE.md) | OAuth configuration, extension identity and permissions |
+| [Chrome Web Store submission](docs/CHROME_WEB_STORE.md) | Store build, listing copy, privacy answers, graphics and checklist |
+| [Privacy policy](https://captainprice24.github.io/EPUBchrome/privacy.html) | Public policy linked from the store listing ([source](web/privacy.html)) |
 | [Contributing](CONTRIBUTING.md) | Development commands, testing and source layout |
 | [Storage and upgrades](docs/STORAGE.md) | Metadata/file separation, migration, memory boundaries and recovery |
 | [Validation](docs/VALIDATION.md) | What was tested and what remains unverified |

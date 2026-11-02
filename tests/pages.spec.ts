@@ -46,19 +46,17 @@ test("Pages subpath loads the reader, sample, persistent notes and extension dow
   );
   expect(failures).toEqual([]);
 });
-test("web preview explains Drive limits and adapts to a narrow screen", async ({
+test("web preview states its privacy terms, hides Drive and adapts to a narrow screen", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 650, height: 900 });
   await page.goto("/EPUBchrome/");
-  await page.getByRole("button", { name: "Open from Drive" }).click();
-  await expect(page.getByRole("dialog")).toContainText(
-    "Google Drive sign-in uses the Chrome extension",
+  await expect(page.locator(".web-preview-banner")).toContainText(
+    "Files stay in this browser, no registration no ads no fees.",
   );
   await expect(
-    page.getByRole("button", { name: "Connect & open" }),
+    page.getByRole("button", { name: "Open from Drive" }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Close", exact: true }).click();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

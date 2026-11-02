@@ -204,6 +204,11 @@ function ZoomControls({
 }
 export function App() {
   const webPreview = import.meta.env.MODE === "pages";
+  // Drive import needs a Google OAuth client in the manifest; store and
+  // web-preview builds ship without one, so the entry point is hidden.
+  const driveConfigured =
+    typeof chrome !== "undefined" &&
+    !!chrome.runtime?.getManifest?.().oauth2?.client_id;
   const [books, setBooks] = useState<BookMetadata[]>([]),
     [marks, setMarks] = useState<Mark[]>([]),
     [selectedId, setSelectedId] = useState<string | null>(null),
@@ -1335,8 +1340,8 @@ export function App() {
         <div className="web-preview-banner" ref={previewBanner}>
           <span>
             <strong>Folio web preview</strong> · Your private EPUB book library,
-            with PDF and other documents too. Files stay in this browser; the
-            extension has a separate library.
+            with PDF and other documents too. Files stay in this browser, no
+            registration no ads no fees.
           </span>
           <a href={asset("folio-chrome.zip")} download>
             <Icon name="download" size={15} />
@@ -1494,9 +1499,11 @@ export function App() {
                     >
                       <Icon name="plus" size={18} /> Import a book
                     </Button>
-                    <Button kind="ghost" onClick={() => setModal("drive")}>
-                      <Icon name="drive" size={18} /> Open from Drive
-                    </Button>
+                    {driveConfigured && (
+                      <Button kind="ghost" onClick={() => setModal("drive")}>
+                        <Icon name="drive" size={18} /> Open from Drive
+                      </Button>
+                    )}
                   </div>
                   <span className="import-hint">
                     Books first · EPUB & MOBI · Documents welcome · Private by
@@ -1678,36 +1685,42 @@ export function App() {
                       </div>
                     </article>
                   ))}
-                  {filter === "books" && !search && (
-                    <article className="sample-card">
-                      <button
-                        title="Read The Quiet Atlas sample"
-                        className="sample-cover"
-                        onClick={() => void openSample()}
-                      >
-                        <Cover
-                          book={{
-                            title: "The Quiet Atlas",
-                            author: "Folio Studio",
-                          }}
-                        />
-                        <span className="sample-badge">
-                          A LITTLE SOMETHING TO START
-                        </span>
-                      </button>
-                      <div className="book-meta">
-                        <h3>The Quiet Atlas</h3>
-                        <p>An original short read by Folio Studio</p>
+                  {filter === "books" &&
+                    !search &&
+                    !books.some(
+                      (b) =>
+                        b.title === "The Quiet Atlas" &&
+                        b.author === "Folio Studio",
+                    ) && (
+                      <article className="sample-card">
                         <button
-                          className="text-button"
+                          title="Read The Quiet Atlas sample"
+                          className="sample-cover"
                           onClick={() => void openSample()}
-                          disabled={!!busy}
                         >
-                          Open the sample <Icon name="next" size={15} />
+                          <Cover
+                            book={{
+                              title: "The Quiet Atlas",
+                              author: "Folio Studio",
+                            }}
+                          />
+                          <span className="sample-badge">
+                            A LITTLE SOMETHING TO START
+                          </span>
                         </button>
-                      </div>
-                    </article>
-                  )}
+                        <div className="book-meta">
+                          <h3>The Quiet Atlas</h3>
+                          <p>An original short read by Folio Studio</p>
+                          <button
+                            className="text-button"
+                            onClick={() => void openSample()}
+                            disabled={!!busy}
+                          >
+                            Open the sample <Icon name="next" size={15} />
+                          </button>
+                        </div>
+                      </article>
+                    )}
                   {!visibleBooks.length && search && (
                     <div className="empty">
                       <Icon name="search" size={30} />
@@ -2677,81 +2690,40 @@ export function App() {
           <div className="modal-illustration">
             <Icon name="drive" size={36} />
           </div>
-          {webPreview ? (
-            <>
-              <p>
-                This web preview opens books and documents from your computer.
-                Google Drive sign-in uses the Chrome extension and needs its
-                OAuth setup.
-              </p>
-              <a
-                className="button secondary"
-                href={asset("folio-chrome.zip")}
-                download
+          <>
+            <p>
+              Bring a document from Google Drive into your private library. Your
+              original file stays unchanged.
+            </p>
+            <label className="field-label" htmlFor="drive-link">
+              GOOGLE DRIVE FILE LINK
+            </label>
+            <input
+              className="text-input"
+              id="drive-link"
+              placeholder="https://drive.google.com/file/d/…"
+              value={driveLink}
+              onChange={(e) => setDriveLink(e.target.value)}
+            />
+            <p className="fine-print">
+              Google sign-in is required. This version requests read-only Drive
+              access to download the file you choose. Your library stays in this
+              browser.
+            </p>
+            {driveBusy && <p role="status">{driveBusy}</p>}
+            <div className="modal-actions">
+              <Button kind="secondary" onClick={closeModal}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void runDrive()}
+                disabled={!driveLink.trim() || !!driveBusy}
               >
-                Download Chrome extension
-              </a>
-              <p className="fine-print">
-                Unzip the download, open chrome://extensions, enable Developer
-                mode and choose Load unpacked.{" "}
-                <a
-                  href="https://github.com/captainprice24/EPUBchrome/blob/main/docs/GOOGLE_DRIVE.md"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Google Drive setup guide
-                </a>
-              </p>
-              <div className="modal-actions">
-                <Button kind="secondary" onClick={closeModal}>
-                  Close
-                </Button>
-                <Button
-                  onClick={() => {
-                    closeModal();
-                    input.current?.click();
-                  }}
-                >
-                  Import local EPUB
-                </Button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p>
-                Bring a document from Google Drive into your private library.
-                Your original file stays unchanged.
-              </p>
-              <label className="field-label" htmlFor="drive-link">
-                GOOGLE DRIVE FILE LINK
-              </label>
-              <input
-                className="text-input"
-                id="drive-link"
-                placeholder="https://drive.google.com/file/d/…"
-                value={driveLink}
-                onChange={(e) => setDriveLink(e.target.value)}
-              />
-              <p className="fine-print">
-                Google sign-in is required. This version requests read-only
-                Drive access to download the file you choose. Your library stays
-                in this browser.
-              </p>
-              {driveBusy && <p role="status">{driveBusy}</p>}
-              <div className="modal-actions">
-                <Button kind="secondary" onClick={closeModal}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => void runDrive()}
-                  disabled={!driveLink.trim() || !!driveBusy}
-                >
-                  <Icon name="drive" size={17} />
-                  {driveBusy ? "Connecting…" : "Connect & open"}
-                </Button>
-              </div>
-            </>
-          )}
+                <Icon name="drive" size={17} />
+                {driveBusy ? "Connecting…" : "Connect & open"}
+              </Button>
+            </div>
+          </>
         </Modal>
       )}
       {modal === "storage" && (

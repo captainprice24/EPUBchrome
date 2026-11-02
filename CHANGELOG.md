@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.1 — Chrome Web Store readiness
+
+- Added Folio toolbar and store icons (16, 32, 48 and 128 px) with a reproducible generator (`npm run icons`), and favicons for the reader and web preview.
+- Removed the unused `storage` permission; store builds request only `unlimitedStorage` and make no network requests.
+- Declared `minimum_chrome_version` 147 for PDF.js 6, and show an "update Chrome" message instead of failing when a browser lacks the APIs it needs.
+- Hid **Open from Drive** in builds without a Google OAuth client, including the web preview and store build.
+- Reused an open Folio tab from the toolbar button instead of opening a new tab on every click.
+- Hid the sample card once the sample book is in the library.
+- Ignored URL and `about:blank` PDF titles written by browsers' print-to-PDF, alongside the existing office-file title cleanup.
+- Updated the web preview banner: files stay in the browser, with no registration, ads or fees.
+- Added a privacy policy page to the GitHub Pages site, store screenshots and promo tiles (`npm run store:assets`), and a submission guide in `docs/CHROME_WEB_STORE.md`.
+
 ## 0.5.0 — Lightweight catalogue, no OCR
 
 - Separated library metadata, source files and previews; library refresh and position saves no longer materialize or rewrite every stored book.

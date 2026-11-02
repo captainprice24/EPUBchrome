@@ -294,7 +294,14 @@ test("duplicate imports, theme memory, focus and reader tabs behave predictably"
   );
   await page.getByRole("button", { name: "Back to library" }).click();
   await expect(page.locator(".welcome")).toHaveCount(0);
-  await page.getByRole("button", { name: "Open the sample" }).click();
+  // The sample card is hidden once the sample is in the library; importing
+  // the identical file again must open the existing copy.
+  await expect(
+    page.getByRole("button", { name: "Open the sample" }),
+  ).toHaveCount(0);
+  await page
+    .locator('input[aria-label="Import document file"]')
+    .setInputFiles("public/demo.epub");
   await expect(page.locator(".toast[role=status]")).toContainText(
     "already in your library",
   );
