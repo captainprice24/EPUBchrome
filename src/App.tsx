@@ -1340,8 +1340,8 @@ export function App() {
         <div className="web-preview-banner" ref={previewBanner}>
           <span>
             <strong>Folio web preview</strong> · Your private EPUB book library,
-            with PDF and other documents too. Files stay in this browser, no
-            registration no ads no fees.
+            with PDF and other documents too. Files stay in this browser. No
+            registration, no ads, no fees.
           </span>
           <a href={asset("folio-chrome.zip")} download>
             <Icon name="download" size={15} />

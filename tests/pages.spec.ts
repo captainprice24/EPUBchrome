@@ -52,7 +52,7 @@ test("web preview states its privacy terms, hides Drive and adapts to a narrow s
   await page.setViewportSize({ width: 650, height: 900 });
   await page.goto("/EPUBchrome/");
   await expect(page.locator(".web-preview-banner")).toContainText(
-    "Files stay in this browser, no registration no ads no fees.",
+    "Files stay in this browser. No registration, no ads, no fees.",
   );
   await expect(
     page.getByRole("button", { name: "Open from Drive" }),
