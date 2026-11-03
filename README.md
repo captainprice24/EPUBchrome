@@ -11,7 +11,7 @@ A private, **EPUB-first book library** for Chrome. Read EPUB and MOBI books, kee
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 [![Build and test](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml/badge.svg)](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml)
 
-[Web preview](https://captainprice24.github.io/EPUBchrome/) · [Get started](#get-started) · [Features](#features) · [Google Drive](docs/GOOGLE_DRIVE.md) · [Contribute](CONTRIBUTING.md) · [Research](docs/RESEARCH.md)
+[**Install from the Chrome Web Store**](https://chromewebstore.google.com/detail/ledggmakmbckalemicbpioibgiakheop) · [Web preview](https://captainprice24.github.io/EPUBchrome/) · [Get started](#get-started) · [Features](#features) · [Google Drive](docs/GOOGLE_DRIVE.md) · [Contribute](CONTRIBUTING.md) · [Research](docs/RESEARCH.md)
 
 </div>
 
@@ -67,9 +67,15 @@ The library now loads a lightweight catalogue rather than every stored book. Ori
 
 The GitHub Pages test site is configured for **https://captainprice24.github.io/EPUBchrome/**. Deployment runs after successful checks on `main`; check the [Actions tab](https://github.com/captainprice24/EPUBchrome/actions/workflows/ci.yml) for its status.
 
-Try the sample or import a supported local document to test reading, bookmarks, highlights and PDF printing without installing the extension. The preview also provides a Chrome extension ZIP. Google Drive sign-in requires the configured extension, and the web preview has separate local storage. See [Pages deployment and testing](docs/GITHUB_PAGES.md).
+Try the sample or import a supported local document to test reading, bookmarks, highlights and PDF printing without installing the extension. Its **Get Chrome extension** button opens the Chrome Web Store listing. Google Drive sign-in requires the configured extension, and the web preview has separate local storage. See [Pages deployment and testing](docs/GITHUB_PAGES.md).
 
 ## Get started
+
+### Install from the Chrome Web Store
+
+Install Folio from its [Chrome Web Store listing](https://chromewebstore.google.com/detail/ledggmakmbckalemicbpioibgiakheop), pin it to the toolbar and click its icon. Choose **Import a book**, drop a supported document into the app, or open the included sample. Store updates install automatically.
+
+### Build from source
 
 You need **Node.js 24.x**, npm, Git, Python 3 (`python3`) on your development machine. On Windows, use WSL for the build commands; the resulting extension can be loaded in Windows Chrome.
 
@@ -96,7 +102,7 @@ The app itself does not require a server or a Google account for local files.
 npm run package
 ```
 
-This creates `.output/folio-0.5.1-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension. This project has not been published to the Chrome Web Store.
+This creates `.output/folio-0.5.1-chrome.zip`. Unzip it and load the extracted folder as above. The GitHub **Code → Download ZIP** option downloads source code, which must be built first; it is not an installable extension.
 
 ### Develop and test
 

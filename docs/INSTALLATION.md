@@ -1,5 +1,9 @@
 # Installation and use
 
+## Install from the Chrome Web Store
+
+Most readers should install Folio from the [Chrome Web Store](https://chromewebstore.google.com/detail/ledggmakmbckalemicbpioibgiakheop). Pin it to the toolbar and click its icon to open your library. Chrome installs updates automatically. The store build has no Google Drive import. The rest of this guide covers building and loading the extension yourself.
+
 ## Build from source
 
 Prerequisites: Node.js 24.x, npm, Python 3 available as `python3`, and Git. Linux and macOS can run the commands in a terminal; Windows contributors should use WSL for this build toolchain. Windows and macOS users can load a previously built extension in their native Chrome browser.

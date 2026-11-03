@@ -1,7 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { readFile } from "node:fs/promises";
 test("Pages subpath loads the reader, sample, persistent notes and extension download", async ({
   page,
 }) => {
@@ -16,15 +15,15 @@ test("Pages subpath loads the reader, sample, persistent notes and extension dow
   await expect(
     page.getByText("Folio web preview", { exact: true }),
   ).toBeVisible();
-  const download = page.waitForEvent("download");
-  await page
-    .getByRole("link", { name: "Get Chrome extension", exact: true })
-    .click();
-  const result = await download;
-  expect(result.suggestedFilename()).toBe("folio-chrome.zip");
-  expect(
-    (await readFile((await result.path())!)).subarray(0, 2).toString(),
-  ).toBe("PK");
+  await expect(
+    page.getByRole("link", { name: "Get Chrome extension", exact: true }),
+  ).toHaveAttribute(
+    "href",
+    "https://chromewebstore.google.com/detail/ledggmakmbckalemicbpioibgiakheop",
+  );
+  // The developer ZIP remains available for manual installs.
+  const zip = await page.request.get("/EPUBchrome/folio-chrome.zip");
+  expect((await zip.body()).subarray(0, 2).toString()).toBe("PK");
   await page.getByRole("button", { name: "Open the sample" }).click();
   const frame = page.frameLocator('iframe[title="Book chapter"]');
   await expect(

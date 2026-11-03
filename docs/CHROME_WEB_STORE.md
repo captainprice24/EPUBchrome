@@ -1,6 +1,8 @@
 # Chrome Web Store submission
 
-Everything needed to publish Folio in the Chrome Web Store: how to build the upload, ready-to-paste listing text, the answers for the **Privacy** tab, and a final checklist.
+**Published:** Folio is public at https://chromewebstore.google.com/detail/ledggmakmbckalemicbpioibgiakheop (item ID `ledggmakmbckalemicbpioibgiakheop`), first published as version 0.5.1 on 3 November 2026.
+
+Everything needed to publish Folio in the Chrome Web Store: how to build the upload, ready-to-paste listing text, the answers for the **Privacy** tab, and a final checklist. Use it again for updates: raise the version in `package.json`, run `npm run package`, and upload the new ZIP under the item's **Package** tab.
 
 ## 1. Build the upload
 
@@ -107,7 +109,7 @@ Certify all three statements:
 - [ ] `npm run package` built without `WXT_GOOGLE_CLIENT_ID`, and the manifest is checked as in §1.
 - [ ] The ZIP was loaded unpacked in a clean Chrome profile: the toolbar icon opens Folio; a second click focuses the same tab; the sample book, an EPUB, a PDF, highlights and backup all work.
 - [ ] Listing text, graphics and Privacy tab filled in from §2 and §3.
-- [ ] After approval, point the web preview's **Get Chrome extension** link and the README at the store listing instead of the ZIP download.
+- [x] After approval, point the web preview's **Get Chrome extension** link and the README at the store listing instead of the ZIP download.
 
 ## Notes for reviewers (optional field)
 

@@ -1343,8 +1343,12 @@ export function App() {
             with PDF and other documents too. Files stay in this browser. No
             registration, no ads, no fees.
           </span>
-          <a href={asset("folio-chrome.zip")} download>
-            <Icon name="download" size={15} />
+          <a
+            href="https://chromewebstore.google.com/detail/ledggmakmbckalemicbpioibgiakheop"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Icon name="plus" size={15} />
             Get Chrome extension
           </a>
         </div>
