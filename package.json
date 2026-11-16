@@ -32,7 +32,7 @@
     "dompurify": "3.4.17",
     "entities": "8.1.0",
     "html2canvas": "1.4.1",
-    "marked": "18.1.2",
+    "marked": "18.2.0",
     "pdfjs-dist": "6.4.299",
     "react": "19.3.1",
     "react-dom": "19.3.1"
