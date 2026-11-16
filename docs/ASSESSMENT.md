@@ -80,7 +80,7 @@ Suggested order for the split, one pull request each: dialogs as components; `Li
 | ID | Finding in v0.5.1 | Status in v0.6.0 |
 | --- | --- | --- |
 | K-1 | About 2.2 MB of the 8.9 MB package was never loaded: duplicate DjVu decoders, the PDF.js scripting sandbox, no-WebAssembly fallbacks | **Fixed.** 6.6 MB unpacked. The packaging script fails if those files return |
-| K-2 | There is no licence, while the contributing guide invites contributions | **Open: owner decision.** MIT or Apache-2.0 both fit the dependencies; Apache-2.0 adds a patent grant and matches PDF.js |
+| K-2 | There was no licence, while the contributing guide invited contributions | **Fixed.** Apache License 2.0, chosen by the owner: `LICENSE`, `NOTICE`, `package.json`, and a copy in every build |
 | K-3 | The main bundle carried the whole CSS grammar | **Fixed.** Parser, walker and generator are imported separately; the main chunk went from 866 KB to 754 KB |
 | K-4 | Python was required to install and package a Node project | **Partly done.** Install, build and packaging are Node only, and Node 22 is supported. The test fixtures, the public corpus and the CI failure summary still use Python |
 | K-5 | Drive import ships switched off and unverified | **Partly done.** It loads on demand and handles expired tokens. Rebuilding it on the Google Picker with the `drive.file` scope, or removing it, is still to be decided |
@@ -133,7 +133,6 @@ Also open: `minimum_chrome_version` is 147 because PDF.js 6 needs very new JavaS
 
 ## Suggested next steps
 
-1. Decide the licence (K-2).
 2. Load the 0.6.0 ZIP in a clean profile, run the checks in [the store guide](CHROME_WEB_STORE.md), then tag `v0.6.0` and upload the ZIP to the store.
 3. Split `App.tsx` (C-1), then move to live queries (P-2).
 4. Mobile reading controls (U-6) and the design tokens (A-3) together, with new screenshots.

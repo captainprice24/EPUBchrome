@@ -36,6 +36,7 @@ Extension and package
 
 Development
 
+- Folio is now licensed under the Apache License 2.0.
 - Installing, building and packaging no longer need Python; `scripts/demo.mjs` and `scripts/package.mjs` replace the Python scripts, and the sample book is built reproducibly. Node.js 22 or later is supported.
 - Added `npm run lint` (Oxlint with React hook rules), `npm run test:unit` (Vitest) and both to CI, with `npm audit`. Unused locals and parameters are TypeScript errors.
 - Added a release workflow for `v*` tags, Dependabot configuration, `SECURITY.md`, and issue and pull-request templates.

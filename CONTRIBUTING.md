@@ -81,6 +81,6 @@ Keep original document bytes immutable. Store metadata, source files, previews a
 
 When reporting an issue, include the browser/OS, app revision, reproduction steps, expected behavior and redacted errors. Share only documents you have permission to distribute. Do not include OAuth tokens, private keys or personal library data.
 
-The project has not selected a source-code license yet. Consult the repository owner before reusing or distributing its original code; dependency licenses are described in [third-party notices](THIRD_PARTY_NOTICES.md).
+Folio is licensed under the [Apache License 2.0](LICENSE). By submitting a contribution you agree that it is provided under that licence, as its section 5 describes. Dependency licences are described in [third-party notices](THIRD_PARTY_NOTICES.md).
 
 The asset preparation script applies a small, version-checked patch to the MIT MOBI parser. `scripts/patch-mobi.mjs` fixes section end bounds, body attributes/missing closing tags and optional EXTH metadata. Review and remove it when an upstream release supplies equivalent fixes; do not silently change the pinned parser or discard compatibility tests.

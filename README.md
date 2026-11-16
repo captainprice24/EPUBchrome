@@ -87,4 +87,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the test setup and source layout.
 | [Security](SECURITY.md) | How to report a vulnerability |
 | [Development history](docs/history/README.md) | Earlier audits, responses and research |
 
-Built with TypeScript, React, WXT, zip.js, Dexie, PDF.js and a Rust/WebAssembly DjVu decoder. Dependency licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). A licence for this project's own source code has not been chosen yet.
+Built with TypeScript, React, WXT, zip.js, Dexie, PDF.js and a Rust/WebAssembly DjVu decoder. Folio is licensed under the [Apache License 2.0](LICENSE). Dependency licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

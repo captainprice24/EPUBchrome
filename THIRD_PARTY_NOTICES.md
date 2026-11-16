@@ -1,5 +1,7 @@
 # Third-party notices
 
+Folio's own source code is licensed under the [Apache License 2.0](LICENSE). The components below keep their own licences.
+
 Folio uses React (MIT), WXT (MIT), zip.js (BSD-3-Clause), Dexie (Apache-2.0), DOMPurify (Apache-2.0 OR MPL-2.0), CSS-tree (MIT), @noble/hashes (MIT), and their transitive dependencies. Consult pinned dependency license files for authoritative terms. Runtime dependency license texts are copied into `public/licenses` and included in the extension and Pages builds.
 
 The Quiet Atlas sample prose is original demonstration content created for this project. All decorative book illustrations are generated using CSS; no external artwork or fonts are included.

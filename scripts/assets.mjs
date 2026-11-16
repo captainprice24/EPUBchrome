@@ -32,6 +32,8 @@ for (const name of [
     `node_modules/${name}/LICENSE`,
     `public/licenses/${name.replaceAll("/", "-")}.txt`,
   );
+await copyFile("LICENSE", "public/licenses/FOLIO-LICENSE.txt");
+await copyFile("NOTICE", "public/licenses/FOLIO-NOTICE.txt");
 await copyFile(
   "THIRD_PARTY_NOTICES.md",
   "public/licenses/THIRD_PARTY_NOTICES.md",
