@@ -26,9 +26,13 @@ Choose **Import a book** or drag an EPUB, PDF, DjVu, MOBI or Markdown document i
 
 Open **Reading settings** in the toolbar to choose **Horizontal pages** or **Vertical reading**. Horizontal mode supports left/right keys, Page Up/Down, mouse-wheel page turns and horizontal swipes. Vertical mode supports natural scrolling and viewport-sized page steps; left/right and Page Up/Down turn pages, and up/down keys also advance a page while focused in the chapter. Home/End go to the first/last page of the chapter.
 
+![Reading settings with interface appearance and two-page choices](images/reading-settings.png)
+
 In windows at least 1100 px wide, **Wide windows → Two pages** shows two columns side by side in horizontal mode. **Interface** chooses whether the library and controls follow your device, match the page theme, or stay light or dark.
 
 The same panel adjusts text size (14–36 px), Publisher/Literary/Classic/Clean typefaces, paper/sepia/night appearance, line spacing and margins. These settings are remembered locally. Font and viewport changes recalculate pagination and return to the page containing the saved text anchor. A page number is a **layout page**, not necessarily the publisher's printed page. Publisher-supplied page lists remain available separately in Contents.
+
+![Page navigation with page counts for the chapter and the book](images/pagination.png)
 
 Contents shows page counts for the current layout. Other chapters are counted sequentially in the background and cached. Chapters larger than 2 MB of markup are counted when opened to avoid expensive background parsing. A whole-book page count appears once all chapter counts are known; it changes with the reading layout.
 
@@ -102,6 +106,10 @@ Choose **Restore / import notes** and select a `.folio` file on the destination 
 For v0.2 libraries, passage quotes are captured with the old renderer before corrected chapters are displayed. Ambiguous or missing highlights remain in the saved list with **Location needs review**. Their text is preserved. Current saved page labels describe the layout at creation; page numbers change with text settings.
 
 ## Fullscreen and fixed-page documents
+
+![Fullscreen reading with bookmark, notes, contents and settings controls](images/fullscreen-reader.png)
+
+![A PDF shown as its original pages with zoom and page navigation](images/pdf-reader.png)
 
 Choose **Enter fullscreen** in the reader toolbar, or press **F** while reading. The library navigation and regular toolbars disappear; settings, page controls and a visible **Exit fullscreen** remain. Press **Esc** to leave. Unsupported browsers use distraction-free reading within the tab. Your passage is preserved when the layout changes.
 

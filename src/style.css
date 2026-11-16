@@ -2497,6 +2497,11 @@ button.brand {
   font-size: 12px;
   white-space: nowrap;
 }
+/* Card actions stack, whatever the length of their labels. */
+.book-meta .collection-move {
+  display: flex;
+  width: fit-content;
+}
 .book-meta .collection-move + .collection-move {
   margin-top: 4px;
 }

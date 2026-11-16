@@ -28,9 +28,13 @@ An empty navigation document remains addressable, with stable spine indices for 
 
 ## Page themes
 
+![Sepia pages shown two at a time; the controls keep the device appearance](images/sepia-pages.png)
+
 Paper, Sepia and Night apply to the reading surface. The library, toolbars, navigation and dialogs follow your device’s light/dark appearance by default, so selecting Sepia never recolours the whole app. **Reading settings → Interface** can instead match the page theme (dark controls with Night pages) or stay light or dark. Page preferences survive reopening; the sun/moon reading button switches page themes only. Original PDF/DjVu pixels keep their publisher colours.
 
 ## Books and Documents
+
+![The Documents shelf with first-page previews](images/documents-library.png)
 
 Folio is an EPUB-first book library. EPUB and MOBI appear under **Books** by default, while PDF, DjVu and Markdown appear under **Documents**. Existing libraries are categorized without rewriting original files or notes. Each category has its own shelf and count, with search and sorting within the selected category. Use **Move to Books** or **Move to Documents** on a card when the default does not fit; your choice survives reloads and library backup/restore. Saved bookmarks and highlights remain accessible across both categories.
 
