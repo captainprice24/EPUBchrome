@@ -167,14 +167,14 @@ test("a repeated-heading highlight paints the selected occurrence and survives r
     buffer = await readFile((await backup.path())!);
   await page.getByRole("button", { name: "Close dialog" }).click();
   await page.getByRole("button", { name: "Remove The Quiet Atlas" }).click();
-  await page.getByRole("button", { name: "Remove book", exact: true }).click();
+  await page.getByRole("button", { name: /^Remove (book|document)$/ }).click();
   await page.getByLabel("Restore library file").setInputFiles({
     name: "backup.folio",
     mimeType: "application/zip",
     buffer,
   });
   await expect(page.locator(".toast[role=status]")).toContainText(
-    "Restored 1 books",
+    "Restored 1 item",
   );
   await page.locator(".book-open").click();
   await expect(

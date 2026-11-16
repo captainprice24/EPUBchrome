@@ -1,5 +1,4 @@
-import { mkdir, copyFile, rm, cp } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
+import { mkdir, copyFile, rm, cp, readdir } from "node:fs/promises";
 import "./patch-mobi.mjs";
 await rm("public/ocr", { recursive: true, force: true });
 await rm("public/licenses", { recursive: true, force: true });
@@ -48,21 +47,23 @@ await copyFile(
 );
 await rm("public/documents", { recursive: true, force: true });
 await mkdir("public/documents/pdf", { recursive: true });
-await mkdir("public/documents/djvu", { recursive: true });
 await copyFile(
   "node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
   "public/documents/pdf/pdf.worker.min.js",
 );
-for (const dir of ["cmaps", "standard_fonts", "wasm", "iccs"])
+for (const dir of ["cmaps", "standard_fonts", "iccs"])
   await cp(`node_modules/pdfjs-dist/${dir}`, `public/documents/pdf/${dir}`, {
     recursive: true,
   });
-await copyFile(
-  "node_modules/djvu-rs/scalar/djvu_rs_bg.wasm",
-  "public/documents/djvu/scalar.wasm",
-);
-await copyFile(
-  "node_modules/djvu-rs/simd128/djvu_rs_bg.wasm",
-  "public/documents/djvu/simd.wasm",
-);
-execFileSync("python3", ["scripts/demo.py"]);
+// Only the image and colour decoders are used. The scripting sandbox
+// (quickjs-eval) and the no-WebAssembly fallbacks are never loaded: PDF
+// scripting is off and the extension CSP allows WebAssembly.
+await mkdir("public/documents/pdf/wasm", { recursive: true });
+for (const name of await readdir("node_modules/pdfjs-dist/wasm"))
+  if (/^LICENSE|^(?:openjpeg|jbig2|qcms_bg)\.wasm$/.test(name))
+    await copyFile(
+      `node_modules/pdfjs-dist/wasm/${name}`,
+      `public/documents/pdf/wasm/${name}`,
+    );
+// The DjVu decoder's WebAssembly is emitted by the bundler next to its worker.
+await import("./demo.mjs");

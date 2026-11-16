@@ -65,7 +65,7 @@ test("IDPF Japanese sample retains Unicode IDs and renders successive content do
           doc
             .locator("[id]")
             .evaluateAll((nodes) =>
-              nodes.some((node) => /[^\x00-\x7f]/.test(node.id)),
+              nodes.some((node) => /[^\p{ASCII}]/u.test(node.id)),
             ),
         )
         .toBe(true);

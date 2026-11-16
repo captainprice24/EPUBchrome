@@ -50,6 +50,10 @@ export async function backupLibrary(bookId?: string) {
     );
     snapshot.ocr = snapshot.ocr.filter((n) => n.bookId === bookId);
   }
+  if (!snapshot.books.length)
+    throw Error(
+      "There is nothing to back up. Choose the entire library or an item that is still in it.",
+    );
   if (
     snapshot.books.reduce((size, b) => size + b.size, 0) >
     2 * 1024 ** 3 - MAX_JSON

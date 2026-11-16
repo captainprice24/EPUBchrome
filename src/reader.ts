@@ -9,6 +9,8 @@ export interface ReadingSettings {
   margin: "narrow" | "comfortable" | "wide";
   theme: ReadingTheme;
   zoom?: number;
+  /** Two pages side by side in wide horizontal windows. */
+  spread?: boolean;
 }
 export interface PageSnapshot {
   page: number;
@@ -38,8 +40,13 @@ export function layoutKey(s: ReadingSettings, w: number, h: number) {
     s.margin,
     Math.round(w),
     Math.round(h),
+    ...(usesSpread(s, w) ? ["spread"] : []),
   ]);
 }
+/** A spread needs room for two comfortable columns. */
+export const SPREAD_MIN_WIDTH = 1100;
+export const usesSpread = (s: ReadingSettings, width: number) =>
+  !!s.spread && s.mode === "horizontal" && width >= SPREAD_MIN_WIDTH;
 export function createReadingDocument(content: string) {
   return readerDocument(
     `<div id="folio-viewport" tabindex="0" aria-label="Chapter pages"><div id="folio-track"><article id="folio-content">${content}</article></div></div>`,
@@ -52,7 +59,7 @@ html,body{height:100%!important;width:100%!important;margin:0!important;padding:
 #folio-content{box-sizing:border-box!important;margin:0 auto!important;padding:var(--folio-y,40px) var(--folio-x,56px)!important;max-width:none!important;font-family:var(--folio-font,Georgia,serif)!important;font-size:var(--folio-size,20px)!important;line-height:var(--folio-leading,1.7)!important;overflow-wrap:anywhere!important;color:var(--folio-fg)!important;background:var(--folio-bg)!important}
 #folio-content p,#folio-content li,#folio-content blockquote,#folio-content dd,#folio-content dt{font-size:1em!important;line-height:inherit!important}#folio-content h1,#folio-content h2,#folio-content h3{line-height:1.25!important}:where(#folio-content p){margin:0 0 1.25em}html[data-typography="custom"] #folio-content :is(p,li,blockquote,dd,dt,h1,h2,h3,[data-folio-html],[data-folio-body]){font-family:var(--folio-font)!important}#folio-content [data-folio-html],#folio-content [data-folio-body]{font-size:inherit!important;line-height:inherit!important;color:inherit!important;background:transparent!important}#folio-content img,#folio-content svg{max-width:100%!important;max-height:calc(var(--folio-h) - 2 * var(--folio-y))!important;object-fit:contain}#folio-content pre{white-space:pre-wrap!important;overflow-wrap:anywhere}#folio-content table{max-width:100%!important;table-layout:fixed}#folio-content h1{font-size:1.9em!important}#folio-content h2{font-size:1.5em!important}
 html[data-reading-mode="horizontal"] #folio-viewport{overflow-x:auto!important;overflow-y:hidden!important;scrollbar-width:none;touch-action:pan-y}
-html[data-reading-mode="horizontal"] #folio-content{height:calc(var(--folio-h) - 2 * var(--folio-y))!important;width:var(--folio-w)!important;padding:0 var(--folio-x)!important;margin:var(--folio-y) 0!important;column-width:calc(var(--folio-w) - 2 * var(--folio-x))!important;column-gap:calc(2 * var(--folio-x))!important;column-fill:auto!important;column-count:auto!important}
+html[data-reading-mode="horizontal"] #folio-content{height:calc(var(--folio-h) - 2 * var(--folio-y))!important;width:var(--folio-w)!important;padding:0 var(--folio-x)!important;margin:var(--folio-y) 0!important;column-width:var(--folio-column,calc(var(--folio-w) - 2 * var(--folio-x)))!important;column-gap:calc(2 * var(--folio-x))!important;column-fill:auto!important;column-count:auto!important}
 html[data-reading-mode="vertical"] #folio-viewport{overflow-y:auto!important;overflow-x:hidden!important;touch-action:pan-y}
 html[data-reading-mode="vertical"] #folio-content{width:var(--folio-w)!important;column-count:auto!important;column-width:auto!important;height:auto!important}
 </style></head>`,
@@ -241,7 +248,13 @@ export class Paginator {
     const minimum = { narrow: 22, comfortable: 44, wide: 76 }[
       this.settings.margin
     ];
-    const x = Math.min(width * 0.22, Math.max(minimum, (width - 740) / 2));
+    // One page: centre a column of at most 740px. Two pages: each viewport
+    // holds two columns of at most 620px. Column and gap widths always add up
+    // to the viewport, so a page turn moves by exactly one viewport.
+    const two = usesSpread(this.settings, width);
+    const x = two
+      ? Math.min(width * 0.11, Math.max(minimum, (width - 1240) / 4))
+      : Math.min(width * 0.22, Math.max(minimum, (width - 740) / 2));
     const y = Math.max(22, Math.min(44, height * 0.07));
     const color = themes[this.settings.theme];
     const values: Record<string, string> = {
@@ -249,6 +262,7 @@ export class Paginator {
       "--folio-h": height + "px",
       "--folio-x": x + "px",
       "--folio-y": y + "px",
+      "--folio-column": (two ? width / 2 : width) - 2 * x + "px",
       "--folio-font": fontFamilies[this.settings.font],
       "--folio-size": this.settings.size + "px",
       "--folio-leading": String(this.settings.lineHeight),

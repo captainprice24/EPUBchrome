@@ -3,7 +3,6 @@ import {
   useId,
   useMemo,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -32,7 +31,7 @@ import {
   watchDatabase,
   type Mark,
 } from "./store";
-import { Epub, readerDocument, type Rendered } from "./epub";
+import { Epub, type Rendered } from "./epub";
 import { openDocument } from "./documents";
 import {
   detectFormat,
@@ -45,7 +44,6 @@ import {
 import { FixedPaginator, createFixedReadingDocument } from "./fixed-reader";
 import { useReaderFullscreen } from "./useFullscreen";
 import { applyHighlights, selectionOffsets } from "./annotations";
-import { driveImport } from "./drive";
 import { Icon } from "./icons";
 import { Cover } from "./Cover";
 import {
@@ -53,6 +51,7 @@ import {
   quoteLocator,
   locatorFactory,
   resolveLocator,
+  textHasher,
   RENDERER_VERSION,
   type TextLocator,
 } from "./locators";
@@ -64,6 +63,22 @@ import type { RenderIssue } from "./render-issues";
 import { createDocumentPreview, PREVIEW_VERSION } from "./thumbnails";
 import { backupLibrary, restoreLibrary } from "./backup";
 import { storageStatus } from "./storage";
+import { compareMarks, compareLibraryMarks, markDate } from "./marks";
+import { bookProgress } from "./progress";
+import {
+  findMatches,
+  matchFrom,
+  rangeForOffsets,
+  type TextMatch,
+} from "./find";
+import {
+  readChoice,
+  writePreference,
+  readLastBackup,
+  backupReminder,
+  type InterfaceTheme,
+} from "./prefs";
+import { notesJson, notesMarkdown } from "./notes-export";
 import {
   Paginator,
   ChapterCounter,
@@ -220,7 +235,13 @@ export function App() {
         : "books",
     ),
     [search, setSearch] = useState(""),
-    [sort, setSort] = useState("recent");
+    [sort, setSort] = useState(() =>
+      readChoice(
+        "folio-sort",
+        ["recent", "added", "title", "author"] as const,
+        "recent",
+      ),
+    );
   const [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
     [notification, setNotification] = useState<{
@@ -228,9 +249,11 @@ export function App() {
       kind: "info" | "warning" | "success";
     }>({ message: "", kind: "info" }),
     [modal, setModal] = useState<
-      "drive" | "print" | "delete" | "reading" | "storage" | null
+      "drive" | "print" | "delete" | "reading" | "storage" | "details" | null
     >(null),
-    [deleteId, setDeleteId] = useState<string | null>(null);
+    [deleteId, setDeleteId] = useState<string | null>(null),
+    [details, setDetails] = useState({ id: "", title: "", author: "" }),
+    [noticeHeld, setNoticeHeld] = useState(false);
   const notice = notification.message;
   const setNotice = useCallback(
     (message: string, kind: "info" | "warning" | "success" = "info") =>
@@ -282,12 +305,30 @@ export function App() {
           ? "night"
           : "paper";
   });
-  const [interfaceDark, setInterfaceDark] = useState(
+  const [systemDark, setSystemDark] = useState(
     () => window.matchMedia("(prefers-color-scheme: dark)").matches,
   );
+  const [interfaceTheme, setInterfaceTheme] = useState<InterfaceTheme>(() =>
+    readChoice(
+      "folio-interface",
+      ["system", "pages", "light", "dark"] as const,
+      "system",
+    ),
+  );
+  const interfaceDark =
+    interfaceTheme === "dark" ||
+    (interfaceTheme === "system" && systemDark) ||
+    (interfaceTheme === "pages" && theme === "night");
+  const [spread, setSpread] = useState(
+    () =>
+      readChoice("folio-spread", ["true", "false"] as const, "false") ===
+      "true",
+  );
+  const [lastBackup, setLastBackup] = useState(readLastBackup);
+  const [legacyText, setLegacyText] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const change = () => setInterfaceDark(media.matches);
+    const change = () => setSystemDark(media.matches);
     media.addEventListener("change", change);
     return () => media.removeEventListener("change", change);
   }, []);
@@ -325,6 +366,15 @@ export function App() {
     observer.observe(banner);
     return () => observer.disconnect();
   }, [webPreview]);
+  const changeZoom = (value: number | ((previous: number) => number)) => {
+    const next = typeof value === "function" ? value(pageZoom) : value;
+    setPageZoom(next);
+    // Each document keeps its own zoom.
+    if (selectedId && engineId.current === selectedId)
+      void updateBook(selectedId, { zoom: next }).catch((error) =>
+        setError(message(error)),
+      );
+  };
   const [immersiveSidebar, setImmersiveSidebar] = useState(false);
   const navigationOpen = fullscreen.enabled ? immersiveSidebar : sidebar;
   const setNavigationOpen = fullscreen.enabled
@@ -349,8 +399,9 @@ export function App() {
       margin,
       theme,
       zoom: pageZoom,
+      spread,
     }),
-    [mode, font, fontChoice, spacing, margin, theme, pageZoom],
+    [mode, font, fontChoice, spacing, margin, theme, pageZoom, spread],
   );
   const [pageInfo, setPageInfo] = useState<PageSnapshot | null>(null);
   const [dimensions, setDimensions] = useState<{
@@ -383,6 +434,11 @@ export function App() {
     [],
   );
   useEffect(() => watchDatabase(setDatabaseState), []);
+  useEffect(() => {
+    // A removed item must not remain the selected backup scope.
+    if (backupScope && !books.some((b) => b.id === backupScope))
+      setBackupScope("");
+  }, [books, backupScope]);
   const input = useRef<HTMLInputElement>(null),
     frame = useRef<HTMLIFrameElement>(null),
     driveAbort = useRef<AbortController | null>(null),
@@ -397,7 +453,9 @@ export function App() {
     countsKey = useRef(""),
     countsRef = useRef<number[]>([]);
   const active = books.find((b) => b.id === selectedId);
-  const bookMarks = marks.filter((m) => m.bookId === selectedId);
+  const bookMarks = marks
+    .filter((m) => m.bookId === selectedId)
+    .sort(compareMarks);
   const currentMarks = bookMarks.filter((m) => m.chapter === chapter);
   const refresh = useCallback(async () => {
     await openLibrary();
@@ -479,13 +537,21 @@ export function App() {
     localStorage.setItem("folio-theme", theme);
   }, [font, mode, fontChoice, spacing, margin, theme]);
   useEffect(() => {
+    writePreference("folio-sort", sort);
+    writePreference("folio-interface", interfaceTheme);
+    writePreference("folio-spread", String(spread));
+  }, [sort, interfaceTheme, spread]);
+  useEffect(() => {
     paginator.current?.configure(settings);
   }, [settings]);
   useEffect(() => {
-    if (!notice) return;
-    const t = setTimeout(() => setNotice(""), 4500);
+    // Warnings stay until dismissed. Other notices wait while the pointer or
+    // keyboard focus is on them, so they can be read at any pace.
+    if (!notice || noticeHeld || notification.kind === "warning") return;
+    const t = setTimeout(() => setNotice(""), 6000);
     return () => clearTimeout(t);
-  }, [notification, setNotice]);
+  }, [notification, noticeHeld, setNotice]);
+  useEffect(() => setNoticeHeld(false), [notification]);
   useEffect(
     () => () => {
       driveAbort.current?.abort();
@@ -501,17 +567,30 @@ export function App() {
     narrow.addEventListener("change", change);
     return () => narrow.removeEventListener("change", change);
   }, []);
-  const importFile = async (file: File) => {
+  // With `batch`, the caller reports one summary for all files: the item is
+  // stored but not opened, and no notice or error is shown per file.
+  const importFile = async (
+    file: File,
+    batch?: { label: string },
+  ): Promise<{
+    ok: boolean;
+    existing?: boolean;
+    id?: string;
+    error?: string;
+  }> => {
+    const fail = (text: string) => {
+      if (!batch) setError(text);
+      return { ok: false, error: text };
+    };
     let format: DocumentFormat;
     try {
       format = detectFormat(file.name, file.type);
       checkDocumentSize(file, format);
     } catch (error) {
-      setError(message(error));
-      return;
+      return fail(message(error));
     }
-    setError("");
-    setBusy("Opening your document…");
+    if (!batch) setError("");
+    setBusy(batch?.label || "Opening your document…");
     let parser: DocumentEngine | undefined;
     try {
       const hash = await contentHash(file);
@@ -557,14 +636,16 @@ export function App() {
             await replaceBookFiles(current.id, repaired, cover);
           }),
         );
-        await refresh();
-        setFilter(bookCollection(existing));
-        setChapter(existing.chapter);
-        setSelectedId(existing.id);
-        setNotice(
-          "This book is already in your library. Its local file copy was refreshed; your saved place and notes are preserved.",
-        );
-        return;
+        if (!batch) {
+          await refresh();
+          setFilter(bookCollection(existing));
+          setChapter(existing.chapter);
+          setSelectedId(existing.id);
+          setNotice(
+            "This book is already in your library. Its local file copy was refreshed; your saved place and notes are preserved.",
+          );
+        }
+        return { ok: true, existing: true, id: existing.id };
       }
       parser = await openDocument(file, format, file.name);
       const estimate = await storageStatus(true);
@@ -607,36 +688,80 @@ export function App() {
           return book;
         }),
       );
-      await refresh();
-      setChapter(stored.chapter);
-      setSelectedId(stored.id);
-      setFilter(bookCollection(stored));
-      setNotice(
-        stored.id === book.id
-          ? "Added to your private library."
-          : "This book is already in your library. Your saved place and notes are preserved.",
-      );
+      if (!batch) {
+        await refresh();
+        setChapter(stored.chapter);
+        setSelectedId(stored.id);
+        setFilter(bookCollection(stored));
+        setNotice(
+          stored.id === book.id
+            ? "Added to your private library."
+            : "This book is already in your library. Your saved place and notes are preserved.",
+        );
+      }
+      return { ok: true, existing: stored.id !== book.id, id: stored.id };
     } catch (e) {
-      setError(
+      return fail(
         e instanceof Error && e.name === "QuotaExceededError"
           ? "Browser storage is full. Back up your library, then free storage and try again."
           : message(e),
       );
     } finally {
       await parser?.close().catch(() => {});
-      setBusy("");
+      if (!batch) setBusy("");
     }
+  };
+  // One file opens straight away. Several are stored one after another and
+  // reported together, so one unreadable file does not stop the rest.
+  const importFiles = async (files: File[]) => {
+    if (files.length === 1) {
+      await importFile(files[0]!);
+      return;
+    }
+    if (!files.length) return;
+    setError("");
+    let added = 0,
+      existing = 0;
+    const failed: string[] = [];
+    try {
+      for (const [i, file] of files.entries()) {
+        const result = await importFile(file, {
+          label: `Importing ${i + 1} of ${files.length}…`,
+        });
+        if (!result.ok) failed.push(`${file.name}: ${result.error}`);
+        else if (result.existing) existing++;
+        else added++;
+      }
+    } finally {
+      setBusy("");
+      await refresh().catch(() => {});
+    }
+    const summary =
+      `Added ${added} of ${files.length} files to your library.` +
+      (existing
+        ? ` ${existing} ${existing === 1 ? "was" : "were"} already there.`
+        : "");
+    if (failed.length)
+      setError(
+        `${summary} Could not import ${failed.slice(0, 3).join(" · ")}${failed.length > 3 ? ` and ${failed.length - 3} more.` : ""}`,
+      );
+    else setNotice(summary, "success");
   };
   const openSample = async () => {
     try {
       setBusy("Preparing your first chapter…");
       const response = await fetch(asset("demo.epub"));
       if (!response.ok) throw Error("The sample book could not be loaded.");
-      await importFile(
+      const result = await importFile(
         new File([await response.blob()], "The Quiet Atlas.epub", {
           type: "application/epub+zip",
         }),
       );
+      // Remember which item is the bundled sample without relying on its title.
+      if (result.id) {
+        await updateBook(result.id, { sample: true });
+        await refresh();
+      }
     } catch (e) {
       setBusy("");
       setError(message(e));
@@ -689,6 +814,7 @@ export function App() {
       textOffset.current = book.textOffset;
       requestedPage.current = undefined;
       engineId.current = selectedId;
+      if (parser.fixedPages) setPageZoom(book.zoom || 1);
       setEngine(parser);
       setBusy("");
       await updateBook(book.id, { lastRead: Date.now() });
@@ -833,6 +959,8 @@ export function App() {
     const chapterIndex = chapter;
     const savedJump = jump.current;
     jump.current = null;
+    findState.current = null;
+    setFindStatus({ text: "", count: 0 });
     setOrphanIds(
       applyHighlights(
         doc,
@@ -955,16 +1083,21 @@ export function App() {
       }
     });
   }
+  const countKey =
+    dimensions && !fixedPages
+      ? layoutKey(settings, dimensions.width, dimensions.height)
+      : "";
   useEffect(() => {
     if (
       !selectedId ||
       !engine ||
       engine.fixedPages ||
       engineId.current !== selectedId ||
-      !dimensions
+      !dimensions ||
+      !countKey
     )
       return;
-    const key = layoutKey(settings, dimensions.width, dimensions.height);
+    const key = countKey;
     let canceled = false;
     const abort = new AbortController();
     let parser: DocumentEngine | undefined;
@@ -1038,7 +1171,8 @@ export function App() {
       counter.destroy();
       void parser?.close().catch(() => {});
     };
-  }, [engine, selectedId, dimensions, settings]);
+    // Theme and zoom leave the layout unchanged; they are not in the key.
+  }, [engine, selectedId, countKey]);
   useEffect(() => {
     if (!selectedId || modal) return;
     const key = (e: KeyboardEvent) => {
@@ -1075,11 +1209,35 @@ export function App() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [selectedId, modal, chapter]);
+  // This runs while rendering. Read and fingerprint the chapter text once per
+  // loaded chapter, and resolve each bookmark once, rather than on every render.
+  const chapterText = useRef<{
+    doc: Document;
+    text: string;
+    fingerprint: () => string;
+    offsets: Map<string, number | undefined>;
+  } | null>(null);
   const bookmarkOffset = (mark: Mark) => {
     const doc = frame.current?.contentDocument;
-    return doc && mark.locator
-      ? resolveLocator(documentText(doc), mark.locator)?.start
-      : undefined;
+    if (!doc || !mark.locator) return undefined;
+    if (doc.readyState !== "complete")
+      return resolveLocator(documentText(doc), mark.locator)?.start;
+    let cache = chapterText.current;
+    if (cache?.doc !== doc) {
+      const text = documentText(doc);
+      cache = chapterText.current = {
+        doc,
+        text,
+        fingerprint: textHasher(text),
+        offsets: new Map(),
+      };
+    }
+    if (!cache.offsets.has(mark.id))
+      cache.offsets.set(
+        mark.id,
+        resolveLocator(cache.text, mark.locator, cache.fingerprint)?.start,
+      );
+    return cache.offsets.get(mark.id);
   };
   const currentBookmark = currentMarks.find(
     (m) =>
@@ -1210,6 +1368,7 @@ export function App() {
     driveAbort.current = controller;
     setError("");
     try {
+      const { driveImport } = await import("./drive");
       const result = await driveImport(
         driveLink,
         setDriveBusy,
@@ -1279,31 +1438,56 @@ export function App() {
       setBusy("");
     }
   };
-  function findText() {
+  const findState = useRef<{
+    doc: Document;
+    query: string;
+    matches: TextMatch[];
+    index: number;
+  } | null>(null);
+  const [findStatus, setFindStatus] = useState({ text: "", count: 0 });
+  function findText(direction = 1) {
     const doc = frame.current?.contentDocument;
-    if (!doc || !find.trim()) return;
-    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-    let node: Node | null;
-    while ((node = walker.nextNode())) {
-      if (node.parentElement?.closest("style,script")) continue;
-      const at = (node.textContent || "")
-        .toLowerCase()
-        .indexOf(find.toLowerCase());
-      if (at >= 0) {
-        const r = doc.createRange();
-        r.setStart(node, at);
-        r.setEnd(node, at + find.length);
-        doc.getSelection()?.removeAllRanges();
-        doc.getSelection()?.addRange(r);
-        if (node.parentElement)
-          paginator.current?.goToElement(node.parentElement);
-        setSelection(selectionOffsets(doc));
-        return;
-      }
+    const query = find.trim();
+    if (!doc?.body || !query) return;
+    let state = findState.current;
+    if (!state || state.doc !== doc || state.query !== query) {
+      // Search the same text sequence that locators use, so a match can span
+      // inline elements and existing highlights.
+      const matches = findMatches(documentText(doc), query);
+      state = findState.current = {
+        doc,
+        query,
+        matches,
+        index: fixedPages ? 0 : matchFrom(matches, pageInfo?.offset || 0),
+      };
+    } else if (state.matches.length)
+      state.index =
+        (state.index + direction + state.matches.length) % state.matches.length;
+    const match = state.matches[state.index];
+    const range = match && rangeForOffsets(doc, match.start, match.end);
+    if (!match || !range) {
+      setFindStatus({ text: "No matches", count: 0 });
+      setNotice(
+        fixedPages ? "No match on this page." : "No match in this chapter.",
+      );
+      return;
     }
-    setNotice("No match in this chapter.");
+    const selected = doc.getSelection();
+    selected?.removeAllRanges();
+    selected?.addRange(range);
+    paginator.current?.goToOffset(match.start);
+    setSelection(selectionOffsets(doc));
+    setFindStatus({
+      text: `${state.index + 1} of ${state.matches.length}`,
+      count: state.matches.length,
+    });
   }
   const collectionView = filter === "books" || filter === "documents";
+  const deleteTarget = books.find((b) => b.id === deleteId);
+  const deleteNoun =
+    deleteTarget && bookCollection(deleteTarget) === "documents"
+      ? "document"
+      : "book";
   const collectionBooks = books.filter((b) => bookCollection(b) === filter);
   const visibleBooks = collectionBooks
     .filter((b) =>
@@ -1312,17 +1496,22 @@ export function App() {
     .sort((a, b) =>
       sort === "title"
         ? a.title.localeCompare(b.title)
-        : sort === "added"
-          ? b.added - a.added
-          : b.lastRead - a.lastRead,
+        : sort === "author"
+          ? a.author.localeCompare(b.author) || a.title.localeCompare(b.title)
+          : sort === "added"
+            ? b.added - a.added
+            : b.lastRead - a.lastRead,
     );
-  const visibleMarks = marks.filter(
-    (m) =>
-      m.kind === (filter === "bookmarks" ? "bookmark" : "highlight") &&
-      (m.text + " " + m.chapterTitle)
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-  );
+  const bookTitles = new Map(books.map((b) => [b.id, b.title]));
+  const visibleMarks = marks
+    .filter(
+      (m) =>
+        m.kind === (filter === "bookmarks" ? "bookmark" : "highlight") &&
+        `${m.text} ${m.chapterTitle} ${bookTitles.get(m.bookId) || ""}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+    )
+    .sort(compareLibraryMarks(new Map(books.map((b, i) => [b.id, i]))));
   const safe = (fn: () => Promise<unknown>) => () =>
     void fn().catch((e) => setError(message(e)));
   return (
@@ -1332,8 +1521,8 @@ export function App() {
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
-        const file = e.dataTransfer.files[0];
-        if (file && !busy) void importFile(file);
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length && !busy) void importFiles(files);
       }}
     >
       {webPreview && (
@@ -1358,11 +1547,12 @@ export function App() {
         aria-label="Import document file"
         type="file"
         accept={documentAccept}
+        multiple
         hidden
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void importFile(f);
+          const files = Array.from(e.target.files || []);
           e.target.value = "";
+          if (files.length) void importFiles(files);
         }}
       />
       <input
@@ -1382,7 +1572,7 @@ export function App() {
                 await refresh();
                 setStorage(await storageStatus());
                 setNotice(
-                  `Restored ${result.books} books. Notes were merged without replacing existing notes.`,
+                  `Restored ${result.books} ${result.books === 1 ? "item" : "items"}. Notes were merged without replacing existing notes.`,
                 );
               } catch (error) {
                 setError(message(error));
@@ -1395,19 +1585,17 @@ export function App() {
       {!selectedId ? (
         <>
           <aside className="library-sidebar">
-            <a
-              href="#"
+            <button
+              type="button"
               className="brand"
-              onClick={(e) => {
-                e.preventDefault();
-                setFilter("books");
-              }}
+              aria-label="Folio home"
+              onClick={() => setFilter("books")}
             >
               <span className="brand-icon">
                 <Icon name="book" size={24} />
               </span>
               folio<span className="brand-dot">.</span>
-            </a>
+            </button>
             <p className="sidebar-caption">YOUR READING ROOM</p>
             <nav aria-label="Library">
               <button
@@ -1436,20 +1624,24 @@ export function App() {
                 </span>
               </button>
               <button
+                aria-current={filter === "bookmarks" ? "page" : undefined}
                 className={filter === "bookmarks" ? "active" : ""}
                 onClick={() => setFilter("bookmarks")}
               >
                 <Icon name="bookmark" />
                 Bookmarks
-                <span>{marks.filter((m) => m.kind === "bookmark").length}</span>
+                <span aria-hidden="true">
+                  {marks.filter((m) => m.kind === "bookmark").length}
+                </span>
               </button>
               <button
+                aria-current={filter === "highlights" ? "page" : undefined}
                 className={filter === "highlights" ? "active" : ""}
                 onClick={() => setFilter("highlights")}
               >
                 <Icon name="highlight" />
                 Highlights
-                <span>
+                <span aria-hidden="true">
                   {marks.filter((m) => m.kind === "highlight").length}
                 </span>
               </button>
@@ -1584,17 +1776,29 @@ export function App() {
                       onChange={(e) => setSearch(e.target.value)}
                     />
                   </label>
+                  {!collectionView && (
+                    <button
+                      className="text-button"
+                      disabled={!marks.length}
+                      onClick={() =>
+                        download(notesMarkdown(books, marks), "folio-notes.md")
+                      }
+                    >
+                      <Icon name="download" size={15} /> Notes as Markdown
+                    </button>
+                  )}
                   {collectionView && (
                     <select
                       aria-label={
                         filter === "books" ? "Sort books" : "Sort documents"
                       }
                       value={sort}
-                      onChange={(e) => setSort(e.target.value)}
+                      onChange={(e) => setSort(e.target.value as typeof sort)}
                     >
                       <option value="recent">Recently read</option>
                       <option value="added">Date added</option>
                       <option value="title">Title A–Z</option>
+                      <option value="author">Author A–Z</option>
                     </select>
                   )}
                 </div>
@@ -1647,7 +1851,10 @@ export function App() {
                           />
                         </div>
                         <span className="book-detail">
-                          {book.format === "pdf" || book.format === "djvu" ? (
+                          {bookProgress(book) === 100 ? (
+                            "Finished"
+                          ) : book.format === "pdf" ||
+                            book.format === "djvu" ? (
                             `${formatNames[book.format]} · Page ${book.chapter + 1} of ${book.chapterCount}`
                           ) : (
                             <>
@@ -1686,6 +1893,21 @@ export function App() {
                             ? "Documents"
                             : "Books"}
                         </button>
+                        <button
+                          className="text-button collection-move"
+                          aria-label={`Edit details of ${book.title}`}
+                          onClick={() => {
+                            setDetails({
+                              id: book.id,
+                              title: book.title,
+                              author: book.author,
+                            });
+                            setModal("details");
+                          }}
+                        >
+                          <Icon name="settings" size={14} />
+                          Edit details
+                        </button>
                       </div>
                     </article>
                   ))}
@@ -1693,8 +1915,10 @@ export function App() {
                     !search &&
                     !books.some(
                       (b) =>
-                        b.title === "The Quiet Atlas" &&
-                        b.author === "Folio Studio",
+                        b.sample ||
+                        // Samples opened before v0.6 carry no marker.
+                        (b.title === "The Quiet Atlas" &&
+                          b.author === "Folio Studio"),
                     ) && (
                       <article className="sample-card">
                         <button
@@ -1761,10 +1985,13 @@ export function App() {
                   {visibleMarks.map((mark) => (
                     <article className="library-note" key={mark.id}>
                       <span className="note-eyebrow">
-                        {books.find((b) => b.id === mark.bookId)?.title} ·{" "}
-                        {mark.chapterTitle}
+                        {bookTitles.get(mark.bookId)} · {mark.chapterTitle} ·
+                        Saved {markDate(mark)}
                       </span>
-                      <button onClick={() => selectMark(mark)}>
+                      <button
+                        title={mark.text}
+                        onClick={() => selectMark(mark)}
+                      >
                         {mark.kind === "highlight"
                           ? "“" + mark.text + "”"
                           : mark.text}
@@ -1800,48 +2027,29 @@ export function App() {
                 className="text-button"
                 onClick={safe(async () => {
                   setStorage(await storageStatus());
+                  setLegacyText((await db.ocr.count()) > 0);
                   setModal("storage");
                 })}
               >
                 <Icon name="download" size={17} /> Storage & backup
+                {backupReminder(lastBackup, books.length) && (
+                  <span className="backup-reminder">
+                    {backupReminder(lastBackup, books.length)}
+                  </span>
+                )}
               </button>
-              {
-                <button
-                  className="text-button"
-                  onClick={safe(async () => {
-                    const notes = await db.ocr.toArray();
-                    download(
-                      new Blob(
-                        [
-                          JSON.stringify(
-                            {
-                              version: 1,
-                              exportedAt: new Date().toISOString(),
-                              books: books.map(
-                                ({ id, title, author, contentHash }) => ({
-                                  id,
-                                  title,
-                                  author,
-                                  contentHash,
-                                }),
-                              ),
-                              annotations: marks,
-                              ocr: notes,
-                            },
-                            null,
-                            2,
-                          ),
-                        ],
-                        { type: "application/json" },
-                      ),
-                      "folio-notes.json",
-                    );
-                  })}
-                >
-                  <Icon name="download" size={13} />
-                  Export notes
-                </button>
-              }
+              <button
+                className="text-button"
+                onClick={safe(async () =>
+                  download(
+                    notesJson(books, marks, await db.ocr.toArray()),
+                    "folio-notes.json",
+                  ),
+                )}
+              >
+                <Icon name="download" size={13} />
+                Export notes
+              </button>
               <span className="privacy-statement">
                 Your books, documents and notes stay in this browser.
               </span>
@@ -1918,7 +2126,7 @@ export function App() {
                 <Icon name="settings" />
               </button>
               {fixedPages && (
-                <ZoomControls zoom={pageZoom} onChange={setPageZoom} />
+                <ZoomControls zoom={pageZoom} onChange={changeZoom} />
               )}
               <span className="tool-separator" hidden={fixedPages} />
               <button
@@ -2018,7 +2226,7 @@ export function App() {
                   : "Fullscreen reading"}
               </span>
               {fixedPages && (
-                <ZoomControls zoom={pageZoom} onChange={setPageZoom} />
+                <ZoomControls zoom={pageZoom} onChange={changeZoom} />
               )}
               <button
                 className="text-button"
@@ -2105,7 +2313,6 @@ export function App() {
                       key={t}
                       className={tab === t ? "active" : ""}
                       onClick={() => setTab(t)}
-                      title={t}
                     >
                       <Icon
                         name={
@@ -2121,7 +2328,7 @@ export function App() {
                         {t === "contents"
                           ? "Contents"
                           : t === "bookmarks"
-                            ? "Saved"
+                            ? "Bookmarks"
                             : "Highlights"}
                       </span>
                     </button>
@@ -2199,6 +2406,7 @@ export function App() {
                             <span>{m.chapterTitle}</span>
                             <button
                               className="note-link"
+                              title={m.text}
                               onClick={() => selectMark(m)}
                             >
                               {(m.unresolved ||
@@ -2210,6 +2418,9 @@ export function App() {
                                 ? "“" + m.text + "”"
                                 : m.text}
                             </button>
+                            <small className="note-meta">
+                              Saved {markDate(m)}
+                            </small>
                             <button
                               className="note-delete"
                               aria-label="Remove annotation"
@@ -2233,7 +2444,7 @@ export function App() {
                           />
                           <p>
                             {tab === "bookmarks"
-                              ? "Your saved pages will appear here."
+                              ? "Your bookmarked pages will appear here."
                               : "Select a passage, then choose Highlight."}
                           </p>
                         </div>
@@ -2309,7 +2520,7 @@ export function App() {
                   className="chapter-find"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    findText();
+                    findText(1);
                   }}
                 >
                   <Icon name="search" size={15} />
@@ -2319,20 +2530,47 @@ export function App() {
                       fixedPages ? "Find in page" : "Find in chapter"
                     }
                     value={find}
-                    onChange={(e) => setFind(e.target.value)}
+                    onChange={(e) => {
+                      setFind(e.target.value);
+                      setFindStatus({ text: "", count: 0 });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && e.shiftKey) {
+                        e.preventDefault();
+                        findText(-1);
+                      }
+                    }}
                   />
-                  <button type="submit" className="text-button">
-                    Find
+                  <span className="find-status" role="status">
+                    {findStatus.text}
+                  </span>
+                  {findStatus.count > 1 && (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label="Previous match"
+                      title="Previous match (Shift+Enter)"
+                      onClick={() => findText(-1)}
+                    >
+                      <Icon name="prev" size={14} />
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="text-button"
+                    title={findStatus.count > 1 ? "Next match (Enter)" : "Find"}
+                  >
+                    {findStatus.count > 1 ? "Next" : "Find"}
                   </button>
                 </form>
                 <button
-                  className={`bookmark-action ${!!currentBookmark ? "saved" : ""}`}
+                  className={`bookmark-action ${currentBookmark ? "saved" : ""}`}
                   aria-label={currentBookmark ? "Bookmarked" : "Bookmark"}
                   onClick={safe(addBookmark)}
                   disabled={!engine || !pageInfo || chapterLoading}
                 >
                   <Icon name="bookmark" size={16} />
-                  <span>{!!currentBookmark ? "Bookmarked" : "Bookmark"}</span>
+                  <span>{currentBookmark ? "Bookmarked" : "Bookmark"}</span>
                 </button>
               </div>
               <div className="paper-wrap" data-page-theme={theme} ref={paper}>
@@ -2521,7 +2759,14 @@ export function App() {
         </div>
       )}
       {notice && !error && (
-        <div className={`toast ${notification.kind}`} role="status">
+        <div
+          className={`toast ${notification.kind}`}
+          role="status"
+          onMouseEnter={() => setNoticeHeld(true)}
+          onMouseLeave={() => setNoticeHeld(false)}
+          onFocus={() => setNoticeHeld(true)}
+          onBlur={() => setNoticeHeld(false)}
+        >
           <Icon
             name={notification.kind === "success" ? "check" : "info"}
             size={18}
@@ -2629,8 +2874,8 @@ export function App() {
               ))}
             </div>
             <p className="fine-print">
-              Applies to the reading pages. The library and controls follow your
-              device’s light or dark appearance.
+              Applies to the reading pages. The library and controls follow the
+              Interface setting below.
             </p>
           </fieldset>
           {fixedPages && (
@@ -2639,6 +2884,34 @@ export function App() {
               the zoom controls to enlarge the page.
             </p>
           )}
+          <div className="reading-detail-controls">
+            <label>
+              Interface
+              <select
+                aria-label="Interface appearance"
+                value={interfaceTheme}
+                onChange={(e) =>
+                  setInterfaceTheme(e.target.value as InterfaceTheme)
+                }
+              >
+                <option value="system">Follow device</option>
+                <option value="pages">Match page theme</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </label>
+            <label hidden={fixedPages || mode !== "horizontal"}>
+              Wide windows
+              <select
+                aria-label="Pages in wide windows"
+                value={spread ? "two" : "one"}
+                onChange={(e) => setSpread(e.target.value === "two")}
+              >
+                <option value="one">One page</option>
+                <option value="two">Two pages</option>
+              </select>
+            </label>
+          </div>
           <div className="reading-detail-controls" hidden={fixedPages}>
             <label>
               Line spacing
@@ -2681,6 +2954,7 @@ export function App() {
                 setSpacing(1.7);
                 setMargin("comfortable");
                 setTheme("paper");
+                setSpread(false);
               }}
             >
               Reset reading settings
@@ -2694,7 +2968,7 @@ export function App() {
           <div className="modal-illustration">
             <Icon name="drive" size={36} />
           </div>
-          <>
+          <div>
             <p>
               Bring a document from Google Drive into your private library. Your
               original file stays unchanged.
@@ -2727,15 +3001,20 @@ export function App() {
                 {driveBusy ? "Connecting…" : "Connect & open"}
               </Button>
             </div>
-          </>
+          </div>
         </Modal>
       )}
       {modal === "storage" && (
         <Modal title="Storage & backup" onClose={closeModal}>
           <p>
             Your books and notes are stored in this browser. A backup includes
-            original files, reading positions, annotations and previously saved
-            text.
+            original files, reading positions and annotations
+            {legacyText ? ", and previously saved recognition text" : ""}.
+          </p>
+          <p>
+            {lastBackup
+              ? `Last full backup: ${new Date(lastBackup.at).toLocaleDateString(undefined, { dateStyle: "medium" })}.`
+              : "No full backup has been made in this browser yet."}
           </p>
           <p role="status">
             {storage?.persistent
@@ -2754,7 +3033,7 @@ export function App() {
             below 2 GB and merges with existing books and notes.
           </p>
           <label className="field-label" htmlFor="backup-scope">
-            Books to back up
+            What to back up
           </label>
           <select
             id="backup-scope"
@@ -2796,6 +3075,14 @@ export function App() {
                     await backupLibrary(backupScope || undefined),
                     `folio-library-${new Date().toISOString().slice(0, 10)}.folio`,
                   );
+                  if (!backupScope) {
+                    const record = { at: Date.now(), items: books.length };
+                    writePreference(
+                      "folio-last-backup",
+                      JSON.stringify(record),
+                    );
+                    setLastBackup(record);
+                  }
                   setNotice(
                     "Backup created. Keep the downloaded file somewhere safe.",
                   );
@@ -2810,16 +3097,15 @@ export function App() {
         </Modal>
       )}
       {modal === "delete" && (
-        <Modal title="Remove this book?" onClose={closeModal}>
+        <Modal title={`Remove this ${deleteNoun}?`} onClose={closeModal}>
           <p>
             This removes the local copy of{" "}
-            <strong>{books.find((b) => b.id === deleteId)?.title}</strong> and
-            its bookmarks, highlights, and saved notes. Your original file is
-            unchanged.
+            <strong>{deleteTarget?.title}</strong> and its bookmarks and
+            highlights. Your original file is unchanged.
           </p>
           <div className="modal-actions">
             <Button kind="secondary" onClick={closeModal}>
-              Keep book
+              Keep {deleteNoun}
             </Button>
             <Button
               kind="danger"
@@ -2827,10 +3113,59 @@ export function App() {
                 if (deleteId) await removeBook(deleteId);
                 setModal(null);
                 await refresh();
-                setNotice("Book removed from this browser.");
+                setNotice(
+                  `${deleteNoun === "book" ? "Book" : "Document"} removed from this browser.`,
+                );
               })}
             >
-              Remove book
+              Remove {deleteNoun}
+            </Button>
+          </div>
+        </Modal>
+      )}
+      {modal === "details" && (
+        <Modal title="Edit details" onClose={closeModal}>
+          <p>
+            Change how this item is listed in your library. The original file is
+            not modified.
+          </p>
+          <label className="field-label" htmlFor="details-title">
+            Title
+          </label>
+          <input
+            className="text-input"
+            id="details-title"
+            maxLength={500}
+            value={details.title}
+            onChange={(e) => setDetails({ ...details, title: e.target.value })}
+          />
+          <label className="field-label" htmlFor="details-author">
+            Author
+          </label>
+          <input
+            className="text-input"
+            id="details-author"
+            maxLength={500}
+            value={details.author}
+            onChange={(e) => setDetails({ ...details, author: e.target.value })}
+          />
+          <div className="modal-actions">
+            <Button kind="secondary" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!details.title.trim()}
+              onClick={safe(async () => {
+                await updateBook(details.id, {
+                  title: details.title.trim(),
+                  author: details.author.trim() || "Unknown author",
+                });
+                setModal(null);
+                await refresh();
+                setNotice("Details saved.", "success");
+              })}
+            >
+              Save details
             </Button>
           </div>
         </Modal>
@@ -2944,23 +3279,5 @@ export function App() {
         </Modal>
       )}
     </div>
-  );
-}
-
-function bookProgress(book: BookMetadata) {
-  if (book.format === "pdf" || book.format === "djvu")
-    return Math.round((100 * book.chapter) / Math.max(1, book.chapterCount));
-  if (!book.page || !book.pageCount || book.chapter >= book.chapterCount)
-    return 0;
-  const counts = book.pagination?.counts.slice(0, book.chapterCount);
-  if (counts?.length === book.chapterCount && counts.every((n) => n > 0)) {
-    const before = counts.slice(0, book.chapter).reduce((a, b) => a + b, 0);
-    return Math.round(
-      (100 * (before + (book.page - 1))) / counts.reduce((a, b) => a + b, 0),
-    );
-  }
-  return Math.round(
-    (100 * (book.chapter + (book.page - 1) / book.pageCount)) /
-      book.chapterCount,
   );
 }

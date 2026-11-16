@@ -19,18 +19,33 @@ export async function driveImport(
   if (!/^[\w-]{10,}$/.test(id))
     throw Error("Paste a Google Drive file link or file ID.");
   onProgress("Connecting to Google Drive…");
-  const auth = await chrome.identity.getAuthToken({
-    interactive: true,
-    scopes: ["https://www.googleapis.com/auth/drive.readonly"],
-  });
-  const token = typeof auth === "string" ? auth : auth.token;
-  if (!token) throw Error("Google sign-in did not return access.");
-  const headers = { Authorization: `Bearer ${token}` };
+  const scopes = ["https://www.googleapis.com/auth/drive.readonly"];
+  const signIn = async () => {
+    const auth = await chrome.identity.getAuthToken({
+      interactive: true,
+      scopes,
+    });
+    const token = typeof auth === "string" ? auth : auth.token;
+    if (!token) throw Error("Google sign-in did not return access.");
+    return token;
+  };
+  let token = await signIn();
+  let headers = { Authorization: `Bearer ${token}` };
   const base = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`;
-  const metaResponse = await fetch(
-    base + "?fields=name,size,mimeType&supportsAllDrives=true",
-    { headers, signal },
-  );
+  const metadata = () =>
+    fetch(base + "?fields=name,size,mimeType&supportsAllDrives=true", {
+      headers,
+      signal,
+    });
+  let metaResponse = await metadata();
+  if (metaResponse.status === 401) {
+    // Chrome caches tokens and can return one that has expired. Discard it
+    // and sign in once more before reporting a permission problem.
+    await chrome.identity.removeCachedAuthToken({ token });
+    token = await signIn();
+    headers = { Authorization: `Bearer ${token}` };
+    metaResponse = await metadata();
+  }
   if (!metaResponse.ok)
     throw Error(
       "Unable to access this Drive file. Check the account and file permissions.",

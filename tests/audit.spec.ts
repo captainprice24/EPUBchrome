@@ -196,7 +196,7 @@ test("library backup restores original books, saved places and notes without dup
   expect(check).toEqual({ books: 1, notes: 2, hash: true });
   await page.getByRole("button", { name: "Close dialog" }).click();
   await page.getByRole("button", { name: "Remove The Quiet Atlas" }).click();
-  await page.getByRole("button", { name: "Remove book", exact: true }).click();
+  await page.getByRole("button", { name: /^Remove (book|document)$/ }).click();
   await expect(page.locator(".book-card")).toHaveCount(0);
   await page.getByLabel("Restore library file").setInputFiles({
     name: "backup.folio",
@@ -207,7 +207,7 @@ test("library backup restores original books, saved places and notes without dup
     page.getByRole("button", { name: "Read The Quiet Atlas" }),
   ).toHaveCount(1);
   await expect(page.locator(".toast[role=status]")).toContainText(
-    "Restored 1 books",
+    "Restored 1 item",
   );
   await page.getByLabel("Restore library file").setInputFiles({
     name: "backup.folio",
@@ -215,7 +215,7 @@ test("library backup restores original books, saved places and notes without dup
     buffer: await readFile(archive),
   });
   await expect(page.locator(".toast[role=status]")).toContainText(
-    "Restored 0 books",
+    "Restored 0 items",
   );
   await expect(page.locator(".book-card")).toHaveCount(1);
   await page.getByRole("button", { name: "Read The Quiet Atlas" }).click();
@@ -267,7 +267,7 @@ test("exported notes can be merged back without replacing existing annotations",
     });
     await expect(page.locator(".library-note")).toHaveCount(1);
     await expect(page.locator(".toast[role=status]")).toContainText(
-      "Restored 0 books",
+      "Restored 0 items",
     );
   }
 });
@@ -287,7 +287,7 @@ test("duplicate imports, theme memory, focus and reader tabs behave predictably"
   await expect(page.locator(".app")).not.toHaveClass(/sepia/);
   await page.getByRole("tab", { name: "Contents" }).focus();
   await page.getByRole("tab", { name: "Contents" }).press("ArrowRight");
-  await expect(page.getByRole("tab", { name: "Saved" })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Bookmarks" })).toBeFocused();
   await expect(page.getByRole("tabpanel")).toHaveAttribute(
     "aria-labelledby",
     "reader-tab-bookmarks",
@@ -352,7 +352,7 @@ test("restoring the same backup in two tabs merges originals and keeps annotatio
     buffer = await readFile((await file.path())!);
   await page.getByRole("button", { name: "Close dialog" }).click();
   await page.getByRole("button", { name: "Remove The Quiet Atlas" }).click();
-  await page.getByRole("button", { name: "Remove book", exact: true }).click();
+  await page.getByRole("button", { name: /^Remove (book|document)$/ }).click();
   await expect(page.locator(".book-card")).toHaveCount(0);
   const other = await context.newPage();
   await other.goto("/reader.html");
@@ -367,7 +367,7 @@ test("restoring the same backup in two tabs merges originals and keeps annotatio
   );
   for (const tab of [page, other]) {
     await expect(tab.locator(".toast[role=status]")).toContainText(
-      /Restored [01] books/,
+      /Restored [01] items?/,
     );
     await expect(tab.locator(".busy-banner")).toHaveCount(0);
     await expect(tab.locator(".book-card")).toHaveCount(1);

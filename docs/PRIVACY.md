@@ -2,12 +2,12 @@
 
 The public privacy policy for store users is published at https://captainprice24.github.io/EPUBchrome/privacy.html (source: `web/privacy.html`). This page gives the technical detail.
 
-Folio v0.5 stores imported document copies, reading positions, bookmarks, highlights and previously saved recognition records in IndexedDB in the current browser profile. Original files are not rewritten. Saved recognition records and annotations are separate from the original bytes. MOBI and Markdown also have a derived, local reading copy; the original remains unchanged. PDF and DjVu pages are decoded locally. No PDF JavaScript, interactive forms or embedded actions are executed by the reader.
+Folio stores imported document copies, reading positions, bookmarks and highlights in IndexedDB in the current browser profile. Original files are not rewritten. Annotations are separate from the original bytes. Reading preferences and the date of the last full backup are kept in the same profile’s local storage. MOBI and Markdown also have a derived, local reading copy; the original remains unchanged. PDF and DjVu pages are decoded locally. No PDF JavaScript, interactive forms or embedded actions are executed by the reader.
 
 ## Network activity
 
 - Local reading does not upload your books or pages.
-- OCR recognition, its worker and language model were removed in v0.5. Old recognition text is kept for export and backup/restore.
+- Folio has no text recognition. Libraries created before v0.5 may still hold recognition text; it stays local and is included in exports and backups.
 - No analytics or telemetry are included.
 - Optional Drive import contacts Google for sign-in and the requested file. See [Google Drive access](GOOGLE_DRIVE.md).
 - External resource URLs embedded in imported book content are blocked rather than fetched.
@@ -24,9 +24,9 @@ The identity and Google host permissions are included only in builds configured 
 
 ## Storage is not a backup
 
-Browser data removal, profile changes, extension identity changes, uninstalling or storage eviction can remove the local library. Keep original EPUBs. Use **Storage & backup** to download a restorable `.folio` archive with originals, positions, annotations and any previously saved recognition text. **Export notes** provides JSON without the originals, importable for matching books. Backups are unencrypted and must be protected by their owner. Persistent storage is requested, and the extension declares `unlimitedStorage`, but neither protects against uninstalling, deliberate clearing or losing the device.
+Browser data removal, profile changes, extension identity changes, uninstalling or storage eviction can remove the local library. Keep original EPUBs. Use **Storage & backup** to download a restorable `.folio` archive with originals, positions and annotations. **Export notes** provides JSON without the originals, importable for matching books. Backups are unencrypted and must be protected by their owner. Persistent storage is requested, and the extension declares `unlimitedStorage`, but neither protects against uninstalling, deliberate clearing or losing the device.
 
-Deleting a book in Folio removes its local book record and associated bookmarks, highlights and previously saved recognition records. It does not delete the original local file or the Drive source.
+Deleting a book in Folio removes its local book record and associated bookmarks and highlights. It does not delete the original local file or the Drive source.
 
 ## Document isolation
 

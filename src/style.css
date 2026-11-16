@@ -2449,3 +2449,67 @@ a {
   max-width: 480px;
   line-height: 1.6;
 }
+
+/* v0.6: library and reading refinements */
+button.brand {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+/* The sample's badge sits where the placeholder cover prints its author. */
+.sample-cover .cover-author {
+  display: none;
+}
+.note-link,
+.library-note > button:not(.icon-btn) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+}
+.note-meta {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.find-status {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.find-status:empty {
+  display: none;
+}
+.chapter-find .icon-btn {
+  width: 28px;
+}
+.backup-reminder {
+  margin-left: 8px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.collection-controls > .text-button {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.book-meta .collection-move + .collection-move {
+  margin-top: 4px;
+}
+.reader-tabs > button {
+  padding-inline: 3px;
+  white-space: nowrap;
+}
+/* Three full labels fill the tab row; the labels alone identify the tabs. */
+.reader-tabs > button svg {
+  display: none;
+}
+@media (max-width: 760px) {
+  .find-status {
+    display: none;
+  }
+}

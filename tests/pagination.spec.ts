@@ -137,7 +137,7 @@ test("multiple page bookmarks and keyboard navigation work across chapter bounda
   await page.getByRole("button", { name: "Next page", exact: true }).click();
   await page.getByRole("button", { name: "Next page", exact: true }).click();
   await page.getByRole("button", { name: "Bookmark", exact: true }).click();
-  await page.getByRole("tab", { name: "Saved" }).click();
+  await page.getByRole("tab", { name: "Bookmarks" }).click();
   await expect(page.locator(".reader-note")).toHaveCount(2);
   await page
     .locator(".reader-note")

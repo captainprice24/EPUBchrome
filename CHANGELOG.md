@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.6.0 — Reading tools, library upkeep and a lighter package
+
+Follows the review in [docs/ASSESSMENT.md](docs/ASSESSMENT.md). Existing libraries, notes, preferences and backups are unchanged; the database schema is the same.
+
+Reading
+
+- **Find in chapter** now counts every match and steps to the next and previous one (Enter, Shift+Enter, buttons). A phrase is found across line breaks, inline formatting and existing highlights. Previously only the first match in a single text node could be reached.
+- Saved bookmarks and highlights are listed in reading order and show the date they were saved. They were listed in the order of their random identifiers.
+- Added **Two pages** for horizontal reading in windows at least 1100 px wide.
+- Added an **Interface** setting: follow the device (default, as before), match the page theme, light, or dark.
+- PDF and DjVu zoom is remembered per document.
+- Warnings stay until dismissed. Other notices last 6 seconds instead of 4.5 and wait while their close button is hovered or focused. Notices still let clicks through to the page beneath them.
+- Bookmark positions are resolved once per loaded chapter. Previously each render re-read and re-hashed the chapter text for every bookmark.
+- Background page counting restarts only when the layout changes, not when the page theme does.
+
+Library
+
+- Several files can be selected or dropped at once. They are added in turn and reported in one summary; an unreadable file no longer stops the others.
+- **Edit details** changes the listed title and author. Sorting by author was added, and the chosen sort is remembered.
+- Download all bookmarks and highlights as Markdown from the Bookmarks and Highlights views. Notes search also matches book titles.
+- The **Storage & backup** button shows a reminder when items are not covered by a full backup or the last one is over 30 days old. The dialog shows the date of the last full backup and no longer mentions recognition text unless the library holds some.
+- A book on its last page shows 100% and **Finished**. Progress previously stopped short of 100%.
+- Dialogs say "document" for documents; restore reports "items" with correct singular and plural.
+- An empty backup can no longer be created after the selected item was removed.
+- The sample is recognized by a stored marker instead of its title, and its badge no longer covers the cover's author line.
+- All four library sections announce the current one to screen readers; the brand is a button.
+
+Extension and package
+
+- Folio opens in a tab after installation.
+- The package shrank from 8.9 MB to 6.6 MB unpacked: duplicate DjVu decoders, the unused PDF.js scripting sandbox and its no-WebAssembly fallbacks were removed, and the CSS parser no longer bundles grammar data it did not use.
+- Drive import (self-built copies only) loads on demand and retries once when Chrome returns an expired cached token.
+- The error screen offers **Copy details for a bug report**: version, browser and error, with no book titles or content. Nothing is sent.
+
+Development
+
+- Installing, building and packaging no longer need Python; `scripts/demo.mjs` and `scripts/package.mjs` replace the Python scripts, and the sample book is built reproducibly. Node.js 22 or later is supported.
+- Added `npm run lint` (Oxlint with React hook rules), `npm run test:unit` (Vitest) and both to CI, with `npm audit`. Unused locals and parameters are TypeScript errors.
+- Added a release workflow for `v*` tags, Dependabot configuration, `SECURITY.md`, and issue and pull-request templates.
+- Rewrote the README; moved the audits, responses, research and earlier validation records to `docs/history/`.
+
 ## 0.5.1 — Chrome Web Store readiness
 
 - Added Folio toolbar and store icons (16, 32, 48 and 128 px) with a reproducible generator (`npm run icons`), and favicons for the reader and web preview.

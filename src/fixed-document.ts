@@ -11,8 +11,6 @@ import type {
   PDFWorker,
 } from "pdfjs-dist";
 
-const escape = (s: string) =>
-  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
 const defaults: RenderOptions = {
   width: 1000,
   height: 800,
@@ -352,7 +350,8 @@ class DjvuConnection {
       if (!request) return;
       clearTimeout(request.timer);
       this.pending.delete(id);
-      error ? request.reject(Error(error)) : request.resolve(result);
+      if (error) request.reject(Error(error));
+      else request.resolve(result);
     };
     this.worker.onerror = () => this.close("The local DjVu decoder failed.");
   }
@@ -393,8 +392,6 @@ class DjvuDocument extends FixedDocument {
     try {
       const { count } = await connection.request<{ count: number }>("open", {
         blob: this.source,
-        scalar: asset("documents/djvu/scalar.wasm"),
-        simd: asset("documents/djvu/simd.wasm"),
       });
       this.setCount(count);
       return connection;

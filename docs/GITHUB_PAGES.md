@@ -19,11 +19,11 @@ GitHub Pages availability depends on repository visibility and the account's pla
 
 ## What differs from the extension
 
-- Books, notes and previously saved recognition text remain in the browser; the web library is separate from extension storage. GitHub Pages content is public, but selected books are read locally rather than uploaded.
+- Books and notes remain in the browser; the web library is separate from extension storage. GitHub Pages content is public, but selected books are read locally rather than uploaded.
 - Storage is scoped to the website's origin. Other pages under the same GitHub Pages origin share that browser security boundary. Keep originals and export notes before clearing browser data.
 - Google Drive uses Chrome extension identity APIs and is unavailable in the web preview. The preview explains this rather than attempting a non-working sign-in.
 - PDF originals download unchanged; reflowing documents and current-page DjVu output use the browser's print dialog. Browser support and formatting can vary; Chrome is the primary test target.
-- No service worker is installed for offline website caching. After initial load, local recognition uses bundled assets, but a first visit or reload still needs the site resources to be available.
+- No service worker is installed for offline website caching. A first visit or reload needs the site resources to be available.
 - Language, file-size, rendering and export limitations are the same as those documented for v0.4 in [Installation](INSTALLATION.md).
 
 ## Build and test locally

@@ -1,17 +1,17 @@
 # Contributing to Folio
 
-Folio is an early TypeScript/React Chrome extension. Start with the [README](README.md), [current limits](docs/INSTALLATION.md#current-limits) and [validation coverage](docs/VALIDATION.md).
+Folio is an early TypeScript/React Chrome extension. Start with the [README](README.md), [current limits](docs/INSTALLATION.md#current-limits) and [validation coverage](docs/VALIDATION.md). The [assessment](docs/ASSESSMENT.md) lists open work in priority order.
 
 ## Set up
 
-Use Node.js 24.x, npm, Python 3 (`python3`). On Windows, use WSL for the development commands.
+Use Node.js 22 or later and npm. Installing, building and packaging need nothing else and work on Windows, macOS and Linux. The browser tests also need Python 3 (`python3`) to build their fixtures; on Windows, run those in WSL.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Installation prepares pinned PDF/DjVu assets and the original sample. `public/documents`, `public/licenses`, `public/demo.epub`, dependencies and build output are generated and intentionally ignored by Git. OCR assets are no longer shipped; asset preparation removes stale copies. No additional private file is required to build the local reader.
+Installation prepares pinned PDF/DjVu assets and the original sample. `public/documents`, `public/licenses`, `public/demo.epub`, dependencies and build output are generated and intentionally ignored by Git. No additional private file is required to build the local reader.
 
 ## Commands
 
@@ -19,16 +19,19 @@ Installation prepares pinned PDF/DjVu assets and the original sample. `public/do
 | --- | --- |
 | `npm ci` | Reproduce the lockfile and prepare local decoder/sample assets |
 | `npm run dev` | Start WXT development mode |
-| `npm run typecheck` | Generate WXT types and run strict TypeScript checks |
+| `npm run lint` | Static checks with Oxlint, including the React hook rules |
+| `npm run typecheck` | Generate WXT types and run strict TypeScript checks; unused code is an error |
+| `npm run test:unit` | Unit tests for pure modules (`tests/unit`) |
 | `npm run build` | Build `.output/chrome-mv3` |
 | `npm test` | Run the browser integration suite against the production build |
+| `npm run test:extension` | Load the built extension in Chromium and test it as installed |
 | `npm run build:pages` | Build the `/EPUBchrome/` web preview and its extension download |
 | `npm run test:pages` | Test the preview, sample and document decoders under the GitHub Pages path |
 | `npm run preview:pages` | Serve the built preview locally on port 4174 |
 | `npm run package` | Build and create the portable extension ZIP |
 | `npm run format` | Format TypeScript, React, styles and JavaScript helpers |
 
-Run `npm run typecheck`, `npm run build` and `npm test` before submitting a code change. The test server serves the built files, so rebuild after changing source. The test suite manages its own server and browser processes.
+Run `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run build` and `npm test` before submitting a code change. `npm run lint` allows the eight existing hook-dependency warnings in `src/App.tsx` and fails on a ninth; fix a warning instead of raising the limit. Put logic that needs no browser in its own module with a unit test instead of adding it to `App.tsx`. The test server serves the built files, so rebuild after changing source. The test suite manages its own server and browser processes.
 
 ## Browser tests
 
@@ -43,13 +46,13 @@ npm test
 
 On a Linux CI machine that needs system libraries, use `npx playwright install --with-deps chromium`. GitHub Actions performs this setup automatically. Generated screenshots and failure traces go to `test-results` and are not committed. The screenshots in `docs/images` are intentional documentation assets captured from the original sample book.
 
-The cloud machine blocks unpacked extensions by administrator policy. HTTP-based tests exercise the built UI and packaged document decoders under the manifest’s script CSP; they do not establish extension-origin behavior, toolbar startup or real Google authentication. Test those separately in a Chrome profile that permits development extensions.
+The main suite serves the built files over HTTP with the manifest’s script CSP. `npm run test:extension` loads the built extension itself and checks installation, the service worker, extension-origin decoders and tab reuse; it needs a full Chromium build, which `npx playwright install chromium` provides. Neither covers real Google authentication.
 
 ## Source map
 
 | Path | Responsibility |
 | --- | --- |
-| `entrypoints/background.ts` | Toolbar action opens the reader tab |
+| `entrypoints/background.ts` | Opens the reader after installation and from the toolbar |
 | `entrypoints/reader` | React application entrypoint |
 | `src/App.tsx`, `src/style.css` | Library, reader and interaction UI |
 | `src/epub.ts` | Bounded ZIP access, EPUB parsing and sandboxed resource preparation |
@@ -59,19 +62,22 @@ The cloud machine blocks unpacked extensions by administrator policy. HTTP-based
 | `src/useFullscreen.ts` | Browser fullscreen and distraction-free fallback |
 | `src/reader.ts` | Pagination, text anchors, reading layout and bounded background chapter counting |
 | `src/annotations.ts` | Text-offset selection and highlight restoration |
+| `src/find.ts`, `src/marks.ts`, `src/progress.ts` | Chapter search, reading order of notes and progress; unit-tested |
+| `src/prefs.ts`, `src/notes-export.ts` | Stored preferences, backup reminder, JSON and Markdown notes export |
 | `src/store.ts`, `src/binary-storage.ts` | Catalogue/file/preview stores, transactional legacy migration and Blob compatibility |
 | `src/Cover.tsx` | Visible cover loading, URL cleanup and bounded preview cache |
 | `tests/catalogue.spec.ts` | Migration, rollback, stale-tab behavior, file-read boundaries and legacy note retention |
 | `src/drive.ts` | Google identity and streamed Drive import |
 | `scripts` | Generated assets, sample EPUB, test fixtures, HTTP preview and packaging |
-| `tests/app.spec.ts` | Browser integration coverage |
+| `tests/*.spec.ts` | Browser integration coverage (Playwright) |
+| `tests/unit` | Unit tests (Vitest) |
 | `wxt.config.ts` | Chrome manifest, permissions, CSP and optional OAuth configuration |
 
 For a plain browser inspection, build and run `node scripts/serve.mjs`, then open the server’s local port 4173 in your development browser. The installed extension does not require this server.
 
 ## Changes and reports
 
-Keep original document bytes immutable. Store metadata, source files, previews and annotations separately; preserve previously saved recognition text. Do not remove size limits, weaken document isolation or bypass integrity checks to make a test pass. Describe unsupported content and failed operations clearly.
+Keep original document bytes immutable. Store metadata, source files, previews and annotations separately; keep the legacy `ocr` records that older libraries may contain. Do not remove size limits, weaken document isolation or bypass integrity checks to make a test pass. Describe unsupported content and failed operations clearly.
 
 When reporting an issue, include the browser/OS, app revision, reproduction steps, expected behavior and redacted errors. Share only documents you have permission to distribute. Do not include OAuth tokens, private keys or personal library data.
 

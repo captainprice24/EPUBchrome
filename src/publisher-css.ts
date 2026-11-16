@@ -1,4 +1,7 @@
-import * as css from "css-tree";
+import parse from "css-tree/parser";
+import walk from "css-tree/walker";
+import generate from "css-tree/generator";
+import type * as css from "css-tree";
 import { reportIssue, type RenderIssue } from "./render-issues";
 
 // A parser, rather than URL regexes, handles escaped URLs and nested at-rules.
@@ -17,14 +20,14 @@ export async function rewriteCss(
   budget.bytes += source.length;
   if (++budget.sheets > 32 || budget.bytes > 2 * 1024 * 1024 || depth > 6)
     throw Error("Publisher styles exceed the stylesheet safety budget.");
-  const tree = css.parse(source);
+  const tree = parse(source);
   const imports: {
     node: css.Atrule;
     item: css.ListItem<css.CssNode>;
     list: css.List<css.CssNode>;
   }[] = [];
   const urls: css.Url[] = [];
-  css.walk(tree, {
+  walk(tree, {
     enter(
       node: css.CssNode,
       item: css.ListItem<css.CssNode> | null,
@@ -37,7 +40,7 @@ export async function rewriteCss(
         list
       ) {
         imports.push({ node, item, list });
-        return css.walk.skip;
+        return walk.skip;
       }
       if (node.type === "TypeSelector") {
         const name = node.name.toLowerCase();
@@ -61,10 +64,10 @@ export async function rewriteCss(
       if (
         node.type === "Declaration" &&
         (/^(?:behavior|-moz-binding)$/i.test(node.property) ||
-          /expression\s*\(/i.test(css.generate(node.value)))
+          /expression\s*\(/i.test(generate(node.value)))
       ) {
         if (item && list) list.remove(item);
-        return css.walk.skip;
+        return walk.skip;
       }
       if (node.type === "Url") urls.push(node);
     },
@@ -92,9 +95,8 @@ export async function rewriteCss(
       if (!budget.seen.has(path)) {
         budget.seen.add(path);
         try {
-          const rest = css
-            .generate(node.prelude!)
-            .slice(css.generate(first).length)
+          const rest = generate(node.prelude!)
+            .slice(generate(first).length)
             .trim();
           // Media queries are supported. Layer/supports imports need a different wrapper.
           if (/\b(?:layer|supports)\b/i.test(rest))
@@ -124,7 +126,7 @@ export async function rewriteCss(
       );
     }
     if (replacement) {
-      const parsed = css.parse(replacement);
+      const parsed = parse(replacement);
       if (parsed.type === "StyleSheet") list.insertList(parsed.children, item);
     }
     list.remove(item);
@@ -144,5 +146,5 @@ export async function rewriteCss(
       );
     }
   }
-  return css.generate(tree);
+  return generate(tree);
 }

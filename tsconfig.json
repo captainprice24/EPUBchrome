@@ -5,6 +5,8 @@
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "types": ["chrome", "node"]
   }
 }

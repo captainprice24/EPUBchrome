@@ -1,8 +1,4 @@
-import init, {
-  WasmDocument,
-  WasmLazyDocument,
-  wasmSimd128Supported,
-} from "djvu-rs";
+import init, { WasmDocument, WasmLazyDocument } from "djvu-rs";
 let full: WasmDocument | undefined, lazy: WasmLazyDocument | undefined;
 let queue = Promise.resolve();
 self.onmessage = (event: MessageEvent) => {
@@ -10,12 +6,10 @@ self.onmessage = (event: MessageEvent) => {
     const { id, command } = event.data;
     try {
       if (command === "open") {
-        const { blob, scalar, simd } = event.data as {
-          blob: Blob;
-          scalar: string;
-          simd: string;
-        };
-        await init(wasmSimd128Supported() ? simd : scalar);
+        const { blob } = event.data as { blob: Blob };
+        // The package selects its SIMD or scalar build and loads the copy the
+        // bundler emits beside this worker; no second copy is packaged.
+        await init();
         if (blob.size <= 64 * 1024 ** 2)
           full = WasmDocument.from_bytes(
             new Uint8Array(await blob.arrayBuffer()),

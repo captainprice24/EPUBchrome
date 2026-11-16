@@ -6,7 +6,7 @@ Most readers should install Folio from the [Chrome Web Store](https://chromewebs
 
 ## Build from source
 
-Prerequisites: Node.js 24.x, npm, Python 3 available as `python3`, and Git. Linux and macOS can run the commands in a terminal; Windows contributors should use WSL for this build toolchain. Windows and macOS users can load a previously built extension in their native Chrome browser.
+Prerequisites: Node.js 22 or later, npm and Git. The build runs on Windows, macOS and Linux. Python 3 is needed only for the browser tests.
 
 ```sh
 git clone https://github.com/captainprice24/EPUBchrome.git
@@ -22,21 +22,25 @@ In Chrome, open `chrome://extensions`, enable **Developer mode**, choose **Load 
 
 ## Read a book
 
-Choose **Import a book** or drag an EPUB, PDF, DjVu, MOBI or Markdown document into the window. The original file remains untouched. Select a chapter from **Contents**. Reading opens in horizontal pages by default, with **Page X of Y** for the current chapter and a page-position slider. Previous/next page buttons turn within a chapter and cross to the adjacent chapter only at its ends. The small chapter arrows above the book skip directly between chapters.
+Choose **Import a book** or drag an EPUB, PDF, DjVu, MOBI or Markdown document into the window. The original file remains untouched. You can select or drop several files at once: they are added one after another without opening, and one summary reports how many were added, which were already in the library and which could not be read. Use **Edit details** on a card to correct a title or author; this changes the library listing only. Select a chapter from **Contents**. Reading opens in horizontal pages by default, with **Page X of Y** for the current chapter and a page-position slider. Previous/next page buttons turn within a chapter and cross to the adjacent chapter only at its ends. The small chapter arrows above the book skip directly between chapters.
 
 Open **Reading settings** in the toolbar to choose **Horizontal pages** or **Vertical reading**. Horizontal mode supports left/right keys, Page Up/Down, mouse-wheel page turns and horizontal swipes. Vertical mode supports natural scrolling and viewport-sized page steps; left/right and Page Up/Down turn pages, and up/down keys also advance a page while focused in the chapter. Home/End go to the first/last page of the chapter.
+
+In windows at least 1100 px wide, **Wide windows → Two pages** shows two columns side by side in horizontal mode. **Interface** chooses whether the library and controls follow your device, match the page theme, or stay light or dark.
 
 The same panel adjusts text size (14–36 px), Publisher/Literary/Classic/Clean typefaces, paper/sepia/night appearance, line spacing and margins. These settings are remembered locally. Font and viewport changes recalculate pagination and return to the page containing the saved text anchor. A page number is a **layout page**, not necessarily the publisher's printed page. Publisher-supplied page lists remain available separately in Contents.
 
 Contents shows page counts for the current layout. Other chapters are counted sequentially in the background and cached. Chapters larger than 2 MB of markup are counted when opened to avoid expensive background parsing. A whole-book page count appears once all chapter counts are known; it changes with the reading layout.
 
-Use **Bookmark** to save the current page; clicking **Bookmarked** removes that page's bookmark. Several pages in the same chapter can be bookmarked. Select book text and choose **Highlight** to store a passage. The navigation tabs and library sidebar revisit saved annotations. New bookmarks follow verified passage quotes across reflow; their saved page labels describe the layout at creation. Legacy notes are preserved; locations that cannot be resolved safely are marked for review. **Find in chapter** finds the first matching text node in the current chapter and brings its page into view; it is not a whole-book search.
+Use **Bookmark** to save the current page; clicking **Bookmarked** removes that page's bookmark. Several pages in the same chapter can be bookmarked. Select book text and choose **Highlight** to store a passage. The navigation tabs and library sidebar revisit saved annotations. New bookmarks follow verified passage quotes across reflow; their saved page labels describe the layout at creation. Legacy notes are preserved; locations that cannot be resolved safely are marked for review. **Find in chapter** counts every match in the current chapter and starts at the first one on or after your page. Press Enter or **Next** for the following match and Shift+Enter or the arrow button for the previous one. A phrase is found across line breaks and inline formatting. It is not a whole-book search.
+
+Saved bookmarks and highlights are listed in reading order with the date they were saved. In the library, open **Bookmarks** or **Highlights** to see them for every book, search them by text or book title, and download them with **Notes as Markdown**.
 
 The library keeps an unchanged copy of each original book. Importing an identical file opens the existing entry and preserves its saved place and notes; content identity is checked with SHA-256.
 
 ## Export notes
 
-From the library footer, choose **Export notes**. The JSON file includes book identities, bookmarks, highlights and previously saved recognition text. It does not contain the original EPUB bytes. Use **Storage & backup → Restore / import notes** to merge it back into matching books. New exports include content hashes; older exports need the original library IDs.
+From the library footer, choose **Export notes**. The JSON file includes book identities, bookmarks and highlights. It does not contain the original EPUB bytes. Use **Storage & backup → Restore / import notes** to merge it back into matching books. New exports include content hashes; older exports need the original library IDs.
 
 ## Print or save a PDF
 
@@ -44,11 +48,11 @@ Open a book, select the printer icon, choose **Current chapter** or **Whole book
 
 The layout uses selectable text and the original available images. Review page size, margins, headers/footers, fonts and the resulting PDF. Reading-view pagination and printed pagination can differ. Print preparation stops when chapter image/style resources cannot be loaded safely. Use individual chapters for image-heavy books.
 
-This is browser printing, not an automated EPUB-to-PDF conversion engine. Highlights and additional recognition text layers are not embedded in the exported PDF. Pixel-identical output, PDF/A, PDF/UA and font-embedding rights are not guaranteed.
+This is browser printing, not an automated EPUB-to-PDF conversion engine. Highlights are not embedded in the exported PDF. Pixel-identical output, PDF/A, PDF/UA and font-embedding rights are not guaranteed.
 
 ## Scanned documents
 
-Scanned PDF/DjVu pages remain readable as images. Selection and search use text already embedded in a document. New OCR recognition was removed in v0.5; existing recognition records are retained for notes export and backup/restore.
+Scanned PDF/DjVu pages remain readable as images. Selection and search use text already embedded in a document. Folio does not recognize text in scans.
 
 ## Package or update
 
@@ -89,7 +93,9 @@ See [validation coverage](VALIDATION.md) for the tests performed and pending com
 
 ## Back up or move your library
 
-In the library footer open **Storage & backup**. Check protection status and storage usage, then choose the entire library or an individual book and select **Back up library**. The downloaded `.folio` file contains original documents, covers, reading positions, annotations and any previously saved recognition text. It is not encrypted. Keep it somewhere safe.
+In the library footer open **Storage & backup**. Check protection status and storage usage, then choose the entire library or an individual book and select **Back up library**. The downloaded `.folio` file contains original documents, covers, reading positions and annotations. It is not encrypted. Keep it somewhere safe.
+
+Folio records when the last backup of the entire library was made. The **Storage & backup** button shows a reminder when items were added since then, when the last full backup is more than 30 days old, or when no backup exists. The record lives in this browser only.
 
 Choose **Restore / import notes** and select a `.folio` file on the destination device/profile. Restore accepts archives below 2 GB, verifies book checksums and merges matching books without replacing existing notes or reading positions. Large libraries can be backed up one book at a time. The extension and Pages preview have separate libraries; a backup can transfer data between them. Persistence protects against automatic eviction where granted, but cannot prevent deliberate data clearing or uninstall loss.
 

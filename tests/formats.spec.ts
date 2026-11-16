@@ -285,7 +285,7 @@ test("mixed-format backups preserve originals and can restore every reader", asy
         .getByRole("button", { name: /^Remove / })
         .click();
       await page
-        .getByRole("button", { name: "Remove book", exact: true })
+        .getByRole("button", { name: /^Remove (book|document)$/ })
         .click();
       await expect(page.locator(".book-card")).toHaveCount(1 - i);
     }
@@ -443,7 +443,7 @@ for (const fallback of [false, true]) {
       page.getByRole("tab", { name: "Highlights", exact: true }),
     ).toHaveAttribute("aria-selected", "true");
     await expect(page.locator(".reader-note")).toHaveCount(1);
-    await page.getByRole("tab", { name: "Saved", exact: true }).click();
+    await page.getByRole("tab", { name: "Bookmarks", exact: true }).click();
     await expect(page.locator(".reader-note")).toHaveCount(1);
     await page.locator(".reader-note .note-link").click();
     if (!fallback)

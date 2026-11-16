@@ -33,6 +33,10 @@ export interface BookMetadata {
   locator?: TextLocator;
   rendererVersion?: number;
   contentHash?: string;
+  /** Zoom last used for this PDF or DjVu document. */
+  zoom?: number;
+  /** The bundled sample book. */
+  sample?: boolean;
 }
 export interface Book extends BookMetadata {
   blob: Blob;

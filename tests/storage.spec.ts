@@ -148,7 +148,7 @@ test("Blob-rejecting storage preserves PDF bytes, pages, saved notes and backup 
   await page
     .getByRole("button", { name: "Remove Local storage guide" })
     .click();
-  await page.getByRole("button", { name: "Remove book", exact: true }).click();
+  await page.getByRole("button", { name: /^Remove (book|document)$/ }).click();
   await expect(page.locator(".book-card")).toHaveCount(0);
   await page.getByLabel("Restore library file").setInputFiles({
     name: "backup.folio",
@@ -156,7 +156,7 @@ test("Blob-rejecting storage preserves PDF bytes, pages, saved notes and backup 
     buffer,
   });
   await expect(page.locator(".toast[role=status]")).toContainText(
-    "Restored 1 books",
+    "Restored 1 item",
   );
   await page.getByRole("button", { name: "Read Local storage guide" }).click();
   await expect(page.locator(".page-count")).toHaveText("Page 2 of 3");

@@ -21,6 +21,12 @@ All upgrade writes share one version-change transaction. A failed metadata/previ
 
 New source/metadata/preview writes are atomic. A matching-original repair preserves the ID, reading position and notes. The legacy source can then be removed when its optional cover no longer requires retention. Old oversized covers restored from backups are archived for export and never used directly as library thumbnails. Removing an item deletes all its local stores and associated notes; it never deletes the user's source file.
 
+## Small records added in v0.6
+
+No schema change. `library` rows may carry two optional fields: `zoom` (last zoom of a PDF or DjVu document) and `sample` (marks the bundled sample book). Edited titles and authors are ordinary metadata updates and are included in backups; `zoom` and `sample` are not.
+
+Preferences live in `localStorage` under keys beginning with `folio-`: reading settings, the chosen shelf and sort, the interface appearance, the two-page choice, and `folio-last-backup` (time and item count of the last backup of the entire library, used for the reminder). Renaming a key resets that preference, so the names are kept.
+
 ## Memory boundaries
 
 - Originals are fetched for the selected reader, an explicit export/backup, repair, or a missing-preview job for a visible card. Dexie's object cache is disabled.

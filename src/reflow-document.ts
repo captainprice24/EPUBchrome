@@ -59,7 +59,8 @@ function parseMobi(blob: Blob) {
     };
     worker.onmessage = (event: MessageEvent<MobiResult>) => {
       finish();
-      event.data.error ? reject(Error(event.data.error)) : resolve(event.data);
+      if (event.data.error) reject(Error(event.data.error));
+      else resolve(event.data);
     };
     worker.onerror = () => {
       finish();

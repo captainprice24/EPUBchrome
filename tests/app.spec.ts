@@ -127,7 +127,7 @@ test("print layout includes all chapters; library search and removal work", asyn
   ).toBeVisible();
   await page.getByRole("textbox", { name: "Search library" }).fill("");
   await page.getByRole("button", { name: "Remove The Quiet Atlas" }).click();
-  await page.getByRole("button", { name: "Remove book", exact: true }).click();
+  await page.getByRole("button", { name: /^Remove (book|document)$/ }).click();
   await expect(
     page.getByRole("button", { name: "Read The Quiet Atlas" }),
   ).toHaveCount(0);

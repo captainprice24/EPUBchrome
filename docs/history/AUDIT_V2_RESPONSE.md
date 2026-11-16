@@ -6,7 +6,7 @@ The re-audit identifies real failures in printing, repeated-text highlights and 
 
 ## Implemented
 
-The v0.5 follow-up completes the catalogue/file separation and removes OCR at the owner’s request. Earlier recommendations below retain their original context. See [storage and migration](STORAGE.md).
+The v0.5 follow-up completes the catalogue/file separation and removes OCR at the owner’s request. Earlier recommendations below retain their original context. See [storage and migration](../STORAGE.md).
 
 | Follow-up | Result |
 | --- | --- |
@@ -56,6 +56,6 @@ External-link handling, metadata editing, live Drive validation/scope/token impr
 
 The new original fixtures reproduce named-entity/prefix recovery, self-closing structure, blocked remote CSS, empty/broken images, failed fonts and repeated text without using the owner's private publications. The initial entity/structural-recovery, missing-image print-review, malformed-recovery and repeated-heading cases failed on v0.4.6 before the changes. Additional checks cover backup/restore and conservative legacy ambiguity, SVG portrait pixels, PDF metadata, original DjVu bytes, linear print counts, contents-column geometry and notice placement.
 
-The [validation record](VALIDATION.md) records the full reader/Pages check results. The owner's seven EPUBs/five PDFs from the report were not available in this workspace and were not independently retested here. Physical iPhone behavior, screen readers, exhaustive EPUB/PDF conformance, complex large publications and print fidelity still need direct validation. No private publication was committed.
+The [validation record](VALIDATION_LOG.md) records the full reader/Pages check results. The owner's seven EPUBs/five PDFs from the report were not available in this workspace and were not independently retested here. Physical iPhone behavior, screen readers, exhaustive EPUB/PDF conformance, complex large publications and print fidelity still need direct validation. No private publication was committed.
 
-v0.4.7 validation passed 57 reader tests and 6 Pages tests. The v0.5 follow-up validates **63 unique reader scenarios and 5 Pages scenarios** across full/focused runs, formatting, TypeScript, production extension/Pages builds, ZIP integrity/version/decoder/license checks and **0 production dependency advisories**. The extension ZIP is 3,955,866 bytes, with 8,900,709 unpacked bytes and no OCR assets. See [validation](VALIDATION.md) for test-run detail and limits. GitHub Actions repeats the complete checks before publishing; consult the run for remote deployment status.
+v0.4.7 validation passed 57 reader tests and 6 Pages tests. The v0.5 follow-up validates **63 unique reader scenarios and 5 Pages scenarios** across full/focused runs, formatting, TypeScript, production extension/Pages builds, ZIP integrity/version/decoder/license checks and **0 production dependency advisories**. The extension ZIP is 3,955,866 bytes, with 8,900,709 unpacked bytes and no OCR assets. See [validation](VALIDATION_LOG.md) for test-run detail and limits. GitHub Actions repeats the complete checks before publishing; consult the run for remote deployment status.

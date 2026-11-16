@@ -1,6 +1,6 @@
 {
   "name": "epubchrome",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,14 +10,17 @@
     "test": "playwright test",
     "prepare:assets": "node scripts/assets.mjs",
     "postinstall": "node scripts/assets.mjs",
-    "package": "npm run build && python3 scripts/package.py",
+    "package": "npm run build && node scripts/package.mjs",
     "format": "prettier --write src entrypoints tests scripts/*.mjs *.ts *.json",
-    "build:pages": "npm run build && python3 scripts/package.py && vite build --config vite.web.config.ts --mode pages && node scripts/pages-assets.mjs",
+    "build:pages": "npm run build && node scripts/package.mjs && vite build --config vite.web.config.ts --mode pages && node scripts/pages-assets.mjs",
     "test:pages": "playwright test --config playwright.pages.config.ts",
     "preview:pages": "node scripts/serve.mjs --pages",
     "icons": "node scripts/icons.mjs",
     "store:assets": "node scripts/store-assets.mjs",
-    "format:check": "prettier --check src entrypoints tests scripts/*.mjs *.ts *.json"
+    "format:check": "prettier --check src entrypoints tests scripts/*.mjs *.ts *.json",
+    "lint": "oxlint --max-warnings 8 src entrypoints scripts tests",
+    "test:unit": "vitest run",
+    "test:extension": "playwright test --config playwright.extension.config.ts"
   },
   "dependencies": {
     "@lingo-reader/mobi-parser": "0.4.6",
@@ -42,9 +45,11 @@
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "oxlint": "1.93.0",
     "prettier": "3.6.2",
     "typescript": "7.0.2",
     "vite": "8.3.5",
+    "vitest": "5.1.0",
     "wxt": "0.21.5"
   },
   "description": "A private, local-first EPUB book library with MOBI, PDF, DjVu and Markdown support, annotations and fullscreen reading.",
@@ -57,6 +62,6 @@
     "url": "https://github.com/captainprice24/EPUBchrome/issues"
   },
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=22"
   }
 }

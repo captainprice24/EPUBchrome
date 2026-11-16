@@ -107,7 +107,7 @@ Certify all three statements:
 - [ ] Trader or non-trader status declared for EU customers in the dashboard.
 - [ ] The GitHub Pages deployment has published `privacy.html`, and the privacy policy URL opens.
 - [ ] `npm run package` built without `WXT_GOOGLE_CLIENT_ID`, and the manifest is checked as in §1.
-- [ ] The ZIP was loaded unpacked in a clean Chrome profile: the toolbar icon opens Folio; a second click focuses the same tab; the sample book, an EPUB, a PDF, highlights and backup all work.
+- [ ] The ZIP was loaded unpacked in a clean Chrome profile: Folio opens in a tab right after loading; the toolbar icon opens Folio; a second click focuses the same tab; the sample book, an EPUB, a PDF, highlights and backup all work.
 - [ ] Listing text, graphics and Privacy tab filled in from §2 and §3.
 - [x] After approval, point the web preview's **Get Chrome extension** link and the README at the store listing instead of the ZIP download.
 

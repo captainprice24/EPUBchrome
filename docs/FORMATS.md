@@ -28,7 +28,7 @@ An empty navigation document remains addressable, with stable spine indices for 
 
 ## Page themes
 
-Paper, Sepia and Night apply to the reading surface. The library, toolbars, navigation and dialogs follow your device’s light/dark appearance, so selecting Sepia never recolours the whole app. Page preferences survive reopening; the sun/moon reading button switches page themes only. Original PDF/DjVu pixels keep their publisher colours.
+Paper, Sepia and Night apply to the reading surface. The library, toolbars, navigation and dialogs follow your device’s light/dark appearance by default, so selecting Sepia never recolours the whole app. **Reading settings → Interface** can instead match the page theme (dark controls with Night pages) or stay light or dark. Page preferences survive reopening; the sun/moon reading button switches page themes only. Original PDF/DjVu pixels keep their publisher colours.
 
 ## Books and Documents
 
@@ -60,7 +60,7 @@ If the browser cannot read a saved source through either API, the reader keeps a
 
 ## Backups and originals
 
-Folio 0.5 writes `.folio` **version 2** backups containing original files, declared formats, names, positions, annotations, previously saved recognition text and covers. Derived reading caches are omitted and rebuilt on restore. It also restores **version 1** EPUB-only backups. Older Folio builds cannot read version 2 archives; update the destination before restoring.
+Folio writes `.folio` **version 2** backups containing original files, declared formats, names, positions, annotations and covers, plus recognition text saved by versions before 0.5 where a library still has it. Derived reading caches are omitted and rebuilt on restore. It also restores **version 1** EPUB-only backups. Older Folio builds cannot read version 2 archives; update the destination before restoring.
 
 PDF download is an unchanged original, not a regenerated document. Reflowing books can use the existing browser print-to-PDF flow. DjVu print output is a raster derivative of the current page, without an embedded OCR layer; it is not a lossless vector conversion. Backups are unencrypted and must be protected by their owner.
 

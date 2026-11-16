@@ -225,7 +225,7 @@ assert len(m['annotations'])==2 and m['ocr'][0]['text']=='Previously saved recog
   for (const title of ["Legacy native", "Legacy chunks"]) {
     await page.getByRole("button", { name: "Remove " + title }).click();
     await page
-      .getByRole("button", { name: "Remove book", exact: true })
+      .getByRole("button", { name: /^Remove (book|document)$/ })
       .click();
   }
   await page.getByLabel("Restore library file").setInputFiles({
@@ -234,7 +234,7 @@ assert len(m['annotations'])==2 and m['ocr'][0]['text']=='Previously saved recog
     buffer,
   });
   await expect(page.locator(".toast[role=status]")).toContainText(
-    "Restored 2 books",
+    "Restored 2 items",
   );
   const restored = await records(page);
   expect(restored.files).toHaveLength(2);
@@ -569,7 +569,7 @@ cover=z.read(b['coverFile']); assert len(cover)>2*1024**2 and cover[-2*1024**2:]
   for (const title of ["Legacy native", "Legacy chunks"]) {
     await page.getByRole("button", { name: "Remove " + title }).click();
     await page
-      .getByRole("button", { name: "Remove book", exact: true })
+      .getByRole("button", { name: /^Remove (book|document)$/ })
       .click();
   }
   await page.getByLabel("Restore library file").setInputFiles({
@@ -578,7 +578,7 @@ cover=z.read(b['coverFile']); assert len(cover)>2*1024**2 and cover[-2*1024**2:]
     buffer,
   });
   await expect(page.locator(".toast[role=status]")).toContainText(
-    "Restored 2 books",
+    "Restored 2 items",
   );
   await expect(page.locator(".book-card .cover img")).toHaveCount(2);
   const restored = await records(page);
