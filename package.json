@@ -25,7 +25,7 @@
   "dependencies": {
     "@lingo-reader/mobi-parser": "0.4.6",
     "@noble/hashes": "2.4.0",
-    "@zip.js/zip.js": "2.24.0",
+    "@zip.js/zip.js": "2.25.0",
     "css-tree": "3.2.1",
     "dexie": "4.4.7",
     "djvu-rs": "0.43.0",
