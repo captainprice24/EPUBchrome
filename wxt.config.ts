@@ -5,16 +5,18 @@ export default defineConfig({
   manifest: ({ mode }) => {
     const clientId = loadEnv(mode, process.cwd(), "WXT_").WXT_GOOGLE_CLIENT_ID;
     return {
-      name: "Folio — Private book library",
-      description:
-        "A private EPUB-first book library with MOBI, PDF, DjVu and Markdown support, bookmarks, highlights and fullscreen reading.",
+      // Texts live in public/_locales/<language>/messages.json. Adding a
+      // folder there translates the name, summary and tooltip.
+      name: "__MSG_extName__",
+      description: "__MSG_extDescription__",
+      default_locale: "en",
       version,
       // PDF.js 6 relies on Map.prototype.getOrInsertComputed (Chrome 145) and
       // Math.sumPrecise (Chrome 147) without polyfills.
       minimum_chrome_version: "147",
       homepage_url: "https://captainprice24.github.io/EPUBchrome/",
       action: {
-        default_title: "Open Folio",
+        default_title: "__MSG_actionTitle__",
         default_icon: {
           16: "icon/16.png",
           32: "icon/32.png",

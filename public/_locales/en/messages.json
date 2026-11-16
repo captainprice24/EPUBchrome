@@ -1,0 +1,14 @@
+{
+  "extName": {
+    "message": "Folio — Private book library",
+    "description": "Name shown in Chrome and the Chrome Web Store. At most 75 characters."
+  },
+  "extDescription": {
+    "message": "A private EPUB-first book library with MOBI, PDF, DjVu and Markdown support, bookmarks, highlights and fullscreen reading.",
+    "description": "Store summary. At most 132 characters."
+  },
+  "actionTitle": {
+    "message": "Open Folio",
+    "description": "Tooltip of the toolbar button."
+  }
+}

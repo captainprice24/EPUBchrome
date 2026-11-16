@@ -7,10 +7,10 @@ What the automated checks cover in v0.6, and what they do not. Records for earli
 | Check | Command | Scope |
 | --- | --- | --- |
 | Formatting | `npm run format:check` | Prettier over source, tests and scripts |
-| Static analysis | `npm run lint` | Oxlint correctness rules and React hook rules. Eight existing hook-dependency warnings in `src/App.tsx` are the recorded baseline; a ninth fails |
+| Static analysis | `npm run lint` | Oxlint correctness rules and React hook rules. Any warning fails; four effects carry a written reason for their dependency list |
 | Types | `npm run typecheck` | Strict TypeScript; unused locals and parameters are errors |
-| Unit tests | `npm run test:unit` | 20 tests of pure modules: chapter search, reading order of notes, progress, backup reminder |
-| Browser tests | `npm test` | 68 scenarios in Chromium against the production build, served with the extension's content security policy |
+| Unit tests | `npm run test:unit` | 42 tests of pure modules: chapter search, reading order of notes, progress, backup reminder, text locators, publisher CSS rewriting, archive paths, format detection, Markdown export |
+| Browser tests | `npm test` | 71 scenarios in Chromium against the production build, served with the extension's content security policy |
 | Installed extension | `npm run test:extension` | The built extension loaded in Chromium: permissions, the tab opened after installation, the sample, DjVu and PDF under the extension's own content security policy, tab reuse from the toolbar action |
 | Web build | `npm run build:pages`, `npm run test:pages` | The same reader under the GitHub Pages path |
 | Package | `npm run package` | Manifest checks, no secrets, no unused decoder files, every ZIP entry read back |
@@ -20,10 +20,10 @@ GitHub Actions runs all of these on every push to `main` and every pull request,
 
 ## What the browser tests cover
 
-- **Reading:** import, chapters, pagination and repagination, saved place across reload and layout changes, right-to-left books, fullscreen, keyboard, wheel and swipe page turns, one and two pages in wide windows.
+- **Reading:** import, chapters, pagination and repagination, saved place across reload and layout changes, right-to-left books, fullscreen, keyboard, wheel and swipe page turns, one and two pages in wide windows, touch taps that turn pages and hide the controls, the browser's Back button.
 - **Notes:** bookmarks, highlights anchored to repeated text, reading-order lists, legacy note migration, JSON export and re-import, Markdown export.
 - **Search:** every match in a chapter, next and previous, matches across inline markup.
-- **Library:** Books and Documents shelves, previews, search and sorting, import of several files with a summary, editing title and author, delete dialogs, backup reminder.
+- **Library:** Books and Documents shelves, previews, search and sorting, import of several files with a summary, editing title and author, delete dialogs, backup reminder, live updates from a second tab.
 - **Formats:** EPUB 2 and 3, MOBI, Markdown, PDF and DjVu, including a pinned set of public IDPF/W3C sample books.
 - **Safety:** removal of scripts, frames and forms, no network requests from book content, archive path and size limits, malformed XHTML recovery.
 - **Storage:** schema upgrades from v1 and v2, failed-upgrade rollback, a second tab during upgrade, injected Blob write and read failures, backup and restore with checksum verification.

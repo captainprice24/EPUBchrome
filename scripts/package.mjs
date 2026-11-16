@@ -19,7 +19,19 @@ const check = (condition, message) => {
 };
 const manifest = JSON.parse(await readFile(`${root}/manifest.json`, "utf8"));
 check(manifest.manifest_version === 3, "the manifest is not version 3");
-check(manifest.action?.default_title === "Open Folio", "unexpected title");
+const messages = JSON.parse(
+  await readFile(
+    `${root}/_locales/${manifest.default_locale}/messages.json`,
+    "utf8",
+  ),
+);
+check(manifest.name === "__MSG_extName__", "the name is not localized");
+check(messages.extName?.message?.length <= 75, "the name is too long");
+check(
+  messages.extDescription?.message?.length <= 132,
+  "the store summary exceeds 132 characters",
+);
+check(messages.actionTitle?.message === "Open Folio", "unexpected title");
 check((await stat(`${root}/reader.html`)).isFile(), "reader.html is missing");
 const files = (await readdir(root, { recursive: true, withFileTypes: true }))
   .filter((item) => item.isFile())

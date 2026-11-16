@@ -24,6 +24,8 @@ In Chrome, open `chrome://extensions`, enable **Developer mode**, choose **Load 
 
 Choose **Import a book** or drag an EPUB, PDF, DjVu, MOBI or Markdown document into the window. The original file remains untouched. You can select or drop several files at once: they are added one after another without opening, and one summary reports how many were added, which were already in the library and which could not be read. Use **Edit details** on a card to correct a title or author; this changes the library listing only. Select a chapter from **Contents**. Reading opens in horizontal pages by default, with **Page X of Y** for the current chapter and a page-position slider. Previous/next page buttons turn within a chapter and cross to the adjacent chapter only at its ends. The small chapter arrows above the book skip directly between chapters.
 
+On a touch screen, tap the middle of the page to hide all controls and let the page fill the screen; tap it again to bring them back. In horizontal reading, tap the right or left quarter of the page to turn it. The browser's Back button returns from a book to the library.
+
 Open **Reading settings** in the toolbar to choose **Horizontal pages** or **Vertical reading**. Horizontal mode supports left/right keys, Page Up/Down, mouse-wheel page turns and horizontal swipes. Vertical mode supports natural scrolling and viewport-sized page steps; left/right and Page Up/Down turn pages, and up/down keys also advance a page while focused in the chapter. Home/End go to the first/last page of the chapter.
 
 ![Reading settings with interface appearance and two-page choices](images/reading-settings.png)

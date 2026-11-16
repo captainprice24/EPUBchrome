@@ -1,19 +1,16 @@
 import {
   useCallback,
-  useId,
   useMemo,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import {
   db,
   asset,
-  bytes,
   download,
   message,
-  removeBook,
   updateBook,
   flushBookUpdates,
   bookCollection,
@@ -31,6 +28,19 @@ import {
   watchDatabase,
   type Mark,
 } from "./store";
+import { liveQuery } from "dexie";
+import { ZoomControls } from "./ui";
+import { usePreferences } from "./usePreferences";
+import { LibraryView } from "./LibraryView";
+import { ReaderSidebar } from "./ReaderSidebar";
+import {
+  ReadingSettingsDialog,
+  DriveDialog,
+  StorageDialog,
+  DeleteDialog,
+  DetailsDialog,
+  PrintDialog,
+} from "./dialogs";
 import { Epub, type Rendered } from "./epub";
 import { openDocument } from "./documents";
 import {
@@ -45,7 +55,6 @@ import { FixedPaginator, createFixedReadingDocument } from "./fixed-reader";
 import { useReaderFullscreen } from "./useFullscreen";
 import { applyHighlights, selectionOffsets } from "./annotations";
 import { Icon } from "./icons";
-import { Cover } from "./Cover";
 import {
   documentText,
   quoteLocator,
@@ -55,30 +64,21 @@ import {
   RENDERER_VERSION,
   type TextLocator,
 } from "./locators";
-import { migrateLocators } from "./migrate-locators";
 import { contentHash } from "./content-hash";
 import { persistBookWrites } from "./binary-storage";
 import { preparePrintLayout } from "./printing";
 import type { RenderIssue } from "./render-issues";
 import { createDocumentPreview, PREVIEW_VERSION } from "./thumbnails";
-import { backupLibrary, restoreLibrary } from "./backup";
+import { restoreLibrary } from "./backup";
 import { storageStatus } from "./storage";
-import { compareMarks, compareLibraryMarks, markDate } from "./marks";
-import { bookProgress } from "./progress";
+import { compareMarks, compareLibraryMarks } from "./marks";
 import {
   findMatches,
   matchFrom,
   rangeForOffsets,
   type TextMatch,
 } from "./find";
-import {
-  readChoice,
-  writePreference,
-  readLastBackup,
-  backupReminder,
-  type InterfaceTheme,
-} from "./prefs";
-import { notesJson, notesMarkdown } from "./notes-export";
+import { readChoice, writePreference, readLastBackup } from "./prefs";
 import {
   Paginator,
   ChapterCounter,
@@ -86,137 +86,8 @@ import {
   layoutKey,
   type ReadingSettings,
   type ReadingMode,
-  type ReadingTheme,
   type PageSnapshot,
 } from "./reader";
-function Modal({
-  title,
-  children,
-  onClose,
-}: {
-  title: string;
-  children: ReactNode;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    const old = document.activeElement as HTMLElement;
-    const box = ref.current;
-    (
-      box?.querySelector<HTMLElement>(
-        "input:not(:disabled),select:not(:disabled),textarea:not(:disabled),.modal-actions button:not(:disabled)",
-      ) || box?.querySelector<HTMLElement>("button")
-    )?.focus();
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "Tab" && box) {
-        const items = Array.from(
-          box.querySelectorAll<HTMLElement>(
-            "button:not(:disabled),input:not(:disabled):not([type=hidden]),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex='0']",
-          ),
-        );
-        const first = items[0],
-          last = items.at(-1);
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last?.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first?.focus();
-        }
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => {
-      document.removeEventListener("keydown", handler);
-      old?.focus();
-    };
-  }, [onClose]);
-  return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        className="modal"
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <header>
-          <h2 id={titleId}>{title}</h2>
-          <button
-            className="icon-btn"
-            aria-label="Close dialog"
-            onClick={onClose}
-          >
-            <Icon name="close" />
-          </button>
-        </header>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Button({
-  children,
-  onClick,
-  kind = "primary",
-  disabled = false,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  kind?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <button className={`button ${kind}`} onClick={onClick} disabled={disabled}>
-      {children}
-    </button>
-  );
-}
-function ZoomControls({
-  zoom,
-  onChange,
-}: {
-  zoom: number;
-  onChange: (value: number | ((previous: number) => number)) => void;
-}) {
-  return (
-    <div className="native-zoom">
-      <button
-        className="icon-btn"
-        aria-label="Zoom out"
-        onClick={() =>
-          onChange((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100))
-        }
-      >
-        −
-      </button>
-      <button
-        className="text-button"
-        aria-label={`Fit page ${Math.round(zoom * 100)}%`}
-        onClick={() => onChange(1)}
-      >
-        {Math.round(zoom * 100)}%
-      </button>
-      <button
-        className="icon-btn"
-        aria-label="Zoom in"
-        onClick={() =>
-          onChange((z) => Math.min(4, Math.round((z + 0.25) * 100) / 100))
-        }
-      >
-        +
-      </button>
-    </div>
-  );
-}
 export function App() {
   const webPreview = import.meta.env.MODE === "pages";
   // Drive import needs a Google OAuth client in the manifest; store and
@@ -270,71 +141,22 @@ export function App() {
     [selection, setSelection] =
       useState<ReturnType<typeof selectionOffsets>>(null),
     [find, setFind] = useState("");
-  const [font, setFont] = useState(() =>
-    Math.max(
-      14,
-      Math.min(36, Number(localStorage.getItem("folio-font")) || 22),
-    ),
-  );
-  const [mode, setMode] = useState<ReadingMode>(() =>
-    localStorage.getItem("folio-reading-mode") === "vertical"
-      ? "vertical"
-      : "horizontal",
-  );
-  const [fontChoice, setFontChoice] = useState<ReadingSettings["font"]>(() => {
-    const f = localStorage.getItem("folio-reading-font");
-    return f === "classic" || f === "modern" || f === "literary"
-      ? f
-      : "publisher";
-  });
-  const [spacing, setSpacing] = useState(() => {
-    const n = Number(localStorage.getItem("folio-spacing"));
-    return [1.4, 1.7, 2].includes(n) ? n : 1.7;
-  });
-  const [margin, setMargin] = useState<ReadingSettings["margin"]>(() => {
-    const v = localStorage.getItem("folio-margin");
-    return v === "narrow" || v === "wide" ? v : "comfortable";
-  });
-  const [theme, setTheme] = useState<ReadingTheme>(() => {
-    const t = localStorage.getItem("folio-theme");
-    return t === "paper" || t === "sepia" || t === "night"
-      ? t
-      : localStorage.getItem("folio-dark") === "true"
-        ? "night"
-        : window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "night"
-          : "paper";
-  });
-  const [systemDark, setSystemDark] = useState(
-    () => window.matchMedia("(prefers-color-scheme: dark)").matches,
-  );
-  const [interfaceTheme, setInterfaceTheme] = useState<InterfaceTheme>(() =>
-    readChoice(
-      "folio-interface",
-      ["system", "pages", "light", "dark"] as const,
-      "system",
-    ),
-  );
-  const interfaceDark =
-    interfaceTheme === "dark" ||
-    (interfaceTheme === "system" && systemDark) ||
-    (interfaceTheme === "pages" && theme === "night");
-  const [spread, setSpread] = useState(
-    () =>
-      readChoice("folio-spread", ["true", "false"] as const, "false") ===
-      "true",
-  );
+  const preferences = usePreferences();
+  const {
+    font,
+    setFont,
+    mode,
+    fontChoice,
+    spacing,
+    margin,
+    theme,
+    setTheme,
+    interfaceDark,
+    spread,
+    lastLightTheme,
+  } = preferences;
   const [lastBackup, setLastBackup] = useState(readLastBackup);
   const [legacyText, setLegacyText] = useState(false);
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const change = () => setSystemDark(media.matches);
-    media.addEventListener("change", change);
-    return () => media.removeEventListener("change", change);
-  }, []);
-  const lastLightTheme = useRef<ReadingTheme>(
-    localStorage.getItem("folio-light-theme") === "sepia" ? "sepia" : "paper",
-  );
   const [backupScope, setBackupScope] = useState("");
   const [storage, setStorage] = useState<Awaited<
     ReturnType<typeof storageStatus>
@@ -365,7 +187,7 @@ export function App() {
     measure();
     observer.observe(banner);
     return () => observer.disconnect();
-  }, [webPreview]);
+  }, [webPreview, fullscreen.ref]);
   const changeZoom = (value: number | ((previous: number) => number)) => {
     const next = typeof value === "function" ? value(pageZoom) : value;
     setPageZoom(next);
@@ -375,6 +197,33 @@ export function App() {
         setError(message(error)),
       );
   };
+  // Opening a book adds a history entry; the browser's Back button then
+  // returns to the library instead of leaving the app.
+  const closeBook = async () => {
+    if (!selectedId) return;
+    await flushBookUpdates(selectedId).catch((error) =>
+      setError(message(error)),
+    );
+    setSelectedId(null);
+    setEngine(null);
+    await refresh().catch((error) => setError(message(error)));
+  };
+  const onHistoryBack = useEffectEvent(() => void closeBook());
+  useEffect(() => {
+    if (!selectedId) return;
+    if (history.state?.folio === "closed")
+      history.replaceState({ folio: "book" }, "");
+    else if (history.state?.folio !== "book")
+      history.pushState({ folio: "book" }, "");
+    const back = () => onHistoryBack();
+    window.addEventListener("popstate", back);
+    return () => window.removeEventListener("popstate", back);
+  }, [selectedId]);
+  // Set by a tap in the middle of the page on a touch screen.
+  const [chromeHidden, setChromeHidden] = useState(false);
+  useEffect(() => {
+    if (!selectedId) setChromeHidden(false);
+  }, [selectedId]);
   const [immersiveSidebar, setImmersiveSidebar] = useState(false);
   const navigationOpen = fullscreen.enabled ? immersiveSidebar : sidebar;
   const setNavigationOpen = fullscreen.enabled
@@ -469,6 +318,23 @@ export function App() {
   useEffect(() => {
     void refresh().catch((e) => setError(message(e)));
   }, [refresh]);
+  // Follow changes made elsewhere, such as another tab of the web version.
+  // Marks are few and change rarely. The catalogue changes with every page
+  // turn of an open book, so it is followed only while the library is shown.
+  useEffect(() => {
+    const subscription = liveQuery(() => db.marks.toArray()).subscribe({
+      next: setMarks,
+      error: () => {},
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+  useEffect(() => {
+    if (selectedId) return;
+    const subscription = liveQuery(() =>
+      db.library.orderBy("lastRead").reverse().toArray(),
+    ).subscribe({ next: setBooks, error: () => {} });
+    return () => subscription.unsubscribe();
+  }, [selectedId]);
   useEffect(() => {
     if (selectedId || busy || (filter !== "books" && filter !== "documents"))
       return;
@@ -481,7 +347,8 @@ export function App() {
         !previewAttempts.current.has(item.id),
     );
     if (!book) return;
-    previewAttempts.current.add(book.id);
+    const attempts = previewAttempts.current;
+    attempts.add(book.id);
     const controller = new AbortController();
     let finished = false;
     // A visibility/filter change may cancel a file read that is already in
@@ -517,42 +384,30 @@ export function App() {
     void job.catch(() => {});
     return () => {
       controller.abort();
-      if (!finished) previewAttempts.current.delete(book.id);
+      if (!finished) attempts.delete(book.id);
     };
   }, [books, selectedId, busy, filter, refresh, visibleCovers]);
   useEffect(() => {
     if (filter === "books" || filter === "documents")
       localStorage.setItem("folio-collection", filter);
   }, [filter]);
-  useEffect(() => {
-    localStorage.setItem("folio-font", String(font));
-    if (theme !== "night") {
-      lastLightTheme.current = theme;
-      localStorage.setItem("folio-light-theme", theme);
-    }
-    localStorage.setItem("folio-reading-mode", mode);
-    localStorage.setItem("folio-reading-font", fontChoice);
-    localStorage.setItem("folio-spacing", String(spacing));
-    localStorage.setItem("folio-margin", margin);
-    localStorage.setItem("folio-theme", theme);
-  }, [font, mode, fontChoice, spacing, margin, theme]);
-  useEffect(() => {
-    writePreference("folio-sort", sort);
-    writePreference("folio-interface", interfaceTheme);
-    writePreference("folio-spread", String(spread));
-  }, [sort, interfaceTheme, spread]);
+  useEffect(() => writePreference("folio-sort", sort), [sort]);
   useEffect(() => {
     paginator.current?.configure(settings);
   }, [settings]);
   useEffect(() => {
     // Warnings stay until dismissed. Other notices wait while the pointer or
     // keyboard focus is on them, so they can be read at any pace.
-    if (!notice || noticeHeld || notification.kind === "warning") return;
+    if (!notification.message || noticeHeld || notification.kind === "warning")
+      return;
     const t = setTimeout(() => setNotice(""), 6000);
     return () => clearTimeout(t);
   }, [notification, noticeHeld, setNotice]);
   useEffect(() => setNoticeHeld(false), [notification]);
   useEffect(
+    // On unmount, abort whichever request is running at that moment; the
+    // refs are meant to be read late.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
     () => () => {
       driveAbort.current?.abort();
       printAbort.current?.abort();
@@ -798,8 +653,15 @@ export function App() {
         await parser.close();
         return;
       }
-      if (parser instanceof Epub && (book.format || "epub") === "epub")
+      if (
+        parser instanceof Epub &&
+        (book.format || "epub") === "epub" &&
+        book.rendererVersion !== RENDERER_VERSION
+      ) {
+        // Only books last opened with an older renderer need this module.
+        const { migrateLocators } = await import("./migrate-locators");
         book = await migrateLocators(book, parser);
+      }
       await refresh();
       if (canceled) {
         await parser.close();
@@ -833,7 +695,7 @@ export function App() {
       if (openedBook.current?.id === selectedId) openedBook.current = null;
       setSelection(null);
     };
-  }, [selectedId]);
+  }, [selectedId, refresh]);
   useEffect(() => {
     if (!engine || engineId.current !== selectedId) return;
     if (engine.fixedPages && !dimensions && paper.current) {
@@ -890,17 +752,28 @@ export function App() {
       cancel = true;
       controller.abort();
     };
+    // fixedRenderKey stands for zoom, mode and page size, and is empty for
+    // reflowing books, whose layout the paginator adjusts without a new render.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, chapter, selectedId, fixedRenderKey]);
+  // Highlights are re-applied only when this chapter's own set changes, not
+  // for every change to any mark in the library.
+  const painted = useRef<{ doc: Document; ids: string } | null>(null);
+  const paintHighlights = (doc: Document) => {
+    const highlights = currentMarks.filter((m) => m.kind === "highlight");
+    const ids = highlights.map((m) => m.id).join(" ");
+    if (painted.current?.doc === doc && painted.current.ids === ids)
+      return false;
+    painted.current = { doc, ids };
+    setOrphanIds(applyHighlights(doc, highlights));
+    return true;
+  };
   useEffect(() => {
     const doc = frame.current?.contentDocument;
-    if (doc?.body)
-      setOrphanIds(
-        applyHighlights(
-          doc,
-          currentMarks.filter((m) => m.kind === "highlight"),
-        ),
-      );
-    paginator.current?.refresh();
+    if (doc?.body && paintHighlights(doc)) paginator.current?.refresh();
+    // paintHighlights compares against what is already painted; it only needs
+    // to run when the marks or the chapter change.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [marks, chapter]);
   function navigate(index: number, anchor?: string, last = false) {
     if (!engine) return;
@@ -961,12 +834,8 @@ export function App() {
     jump.current = null;
     findState.current = null;
     setFindStatus({ text: "", count: 0 });
-    setOrphanIds(
-      applyHighlights(
-        doc,
-        currentMarks.filter((m) => m.kind === "highlight"),
-      ),
-    );
+    painted.current = null;
+    paintHighlights(doc);
     const text = documentText(doc);
     const captureLocator = locatorFactory(
       text,
@@ -1074,13 +943,38 @@ export function App() {
         fullscreen.toggle();
       }
     });
+    // A click that follows a touch is a tap. On touch screens the sides of a
+    // page turn it and the middle hides or shows the controls, so the page
+    // can use the whole screen. Mouse clicks keep their usual meaning.
+    let lastTouch = -Infinity;
+    doc.addEventListener(
+      "touchend",
+      () => {
+        lastTouch = performance.now();
+      },
+      { passive: true },
+    );
     doc.addEventListener("click", (e) => {
       const a = (e.target as Element).closest("a");
       if (a) {
         e.preventDefault();
         const href = a.getAttribute("data-book-href");
         if (href) goHref(href);
+        return;
       }
+      // Browsers that report the pointer say so directly; others are
+      // recognized by the touch that just ended.
+      const pointer = (e as PointerEvent).pointerType;
+      const tapped = pointer
+        ? pointer === "touch"
+        : performance.now() - lastTouch < 800;
+      if (!tapped || !doc.getSelection()?.isCollapsed) return;
+      const place = e.clientX / Math.max(1, doc.documentElement.clientWidth);
+      const sides = doc.documentElement.dataset.readingMode === "horizontal";
+      const forward = paginator.current?.rightToLeft ? -1 : 1;
+      if (sides && place < 0.25) paginator.current?.turn(-forward);
+      else if (sides && place > 0.75) paginator.current?.turn(forward);
+      else setChromeHidden((hidden) => !hidden);
     });
   }
   const countKey =
@@ -1171,44 +1065,48 @@ export function App() {
       counter.destroy();
       void parser?.close().catch(() => {});
     };
+    // countKey stands for the settings and page size that affect layout.
     // Theme and zoom leave the layout unchanged; they are not in the key.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, selectedId, countKey]);
+  // The handler always sees the current engine, chapter and paginator.
+  const onReaderKey = useEffectEvent((e: KeyboardEvent) => {
+    if (
+      e.key.toLowerCase() === "f" &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      !(e.target as Element).closest("input,textarea,select")
+    ) {
+      e.preventDefault();
+      fullscreen.toggle();
+      return;
+    }
+    if (
+      (e.target as Element).closest("input,textarea,select,button") ||
+      e.ctrlKey ||
+      e.metaKey ||
+      e.altKey
+    )
+      return;
+    if (["ArrowRight", "PageDown"].includes(e.key)) {
+      e.preventDefault();
+      turnPage(
+        e.key === "ArrowRight" && paginator.current?.rightToLeft ? -1 : 1,
+      );
+    } else if (["ArrowLeft", "PageUp"].includes(e.key)) {
+      e.preventDefault();
+      turnPage(
+        e.key === "ArrowLeft" && paginator.current?.rightToLeft ? 1 : -1,
+      );
+    }
+  });
   useEffect(() => {
     if (!selectedId || modal) return;
-    const key = (e: KeyboardEvent) => {
-      if (
-        e.key.toLowerCase() === "f" &&
-        !e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        !(e.target as Element).closest("input,textarea,select")
-      ) {
-        e.preventDefault();
-        fullscreen.toggle();
-        return;
-      }
-      if (
-        (e.target as Element).closest("input,textarea,select,button") ||
-        e.ctrlKey ||
-        e.metaKey ||
-        e.altKey
-      )
-        return;
-      if (["ArrowRight", "PageDown"].includes(e.key)) {
-        e.preventDefault();
-        turnPage(
-          e.key === "ArrowRight" && paginator.current?.rightToLeft ? -1 : 1,
-        );
-      } else if (["ArrowLeft", "PageUp"].includes(e.key)) {
-        e.preventDefault();
-        turnPage(
-          e.key === "ArrowLeft" && paginator.current?.rightToLeft ? 1 : -1,
-        );
-      }
-    };
+    const key = (e: KeyboardEvent) => onReaderKey(e);
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [selectedId, modal, chapter]);
+  }, [selectedId, modal]);
   // This runs while rendering. Read and fingerprint the chapter text once per
   // loaded chapter, and resolve each bookmark once, rather than on every render.
   const chapterText = useRef<{
@@ -1517,7 +1415,7 @@ export function App() {
   return (
     <div
       ref={fullscreen.ref}
-      className={`app ${fullscreen.enabled ? "immersive" : ""} ${fixedPages ? "native-reading" : ""} ${selectedId ? "reading" : ""} ${interfaceDark ? "night" : ""}`}
+      className={`app ${fullscreen.enabled ? "immersive" : ""} ${fixedPages ? "native-reading" : ""} ${selectedId ? "reading" : ""} ${selectedId && chromeHidden ? "chrome-hidden" : ""} ${interfaceDark ? "night" : ""}`}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -1584,477 +1482,39 @@ export function App() {
       />
       {!selectedId ? (
         <>
-          <aside className="library-sidebar">
-            <button
-              type="button"
-              className="brand"
-              aria-label="Folio home"
-              onClick={() => setFilter("books")}
-            >
-              <span className="brand-icon">
-                <Icon name="book" size={24} />
-              </span>
-              folio<span className="brand-dot">.</span>
-            </button>
-            <p className="sidebar-caption">YOUR READING ROOM</p>
-            <nav aria-label="Library">
-              <button
-                aria-current={filter === "books" ? "page" : undefined}
-                className={filter === "books" ? "active" : ""}
-                onClick={() => setFilter("books")}
-              >
-                <Icon name="grid" />
-                Books
-                <span aria-hidden="true">
-                  {books.filter((b) => bookCollection(b) === "books").length}
-                </span>
-              </button>
-              <button
-                aria-current={filter === "documents" ? "page" : undefined}
-                className={filter === "documents" ? "active" : ""}
-                onClick={() => setFilter("documents")}
-              >
-                <Icon name="document" />
-                Documents
-                <span aria-hidden="true">
-                  {
-                    books.filter((b) => bookCollection(b) === "documents")
-                      .length
-                  }
-                </span>
-              </button>
-              <button
-                aria-current={filter === "bookmarks" ? "page" : undefined}
-                className={filter === "bookmarks" ? "active" : ""}
-                onClick={() => setFilter("bookmarks")}
-              >
-                <Icon name="bookmark" />
-                Bookmarks
-                <span aria-hidden="true">
-                  {marks.filter((m) => m.kind === "bookmark").length}
-                </span>
-              </button>
-              <button
-                aria-current={filter === "highlights" ? "page" : undefined}
-                className={filter === "highlights" ? "active" : ""}
-                onClick={() => setFilter("highlights")}
-              >
-                <Icon name="highlight" />
-                Highlights
-                <span aria-hidden="true">
-                  {marks.filter((m) => m.kind === "highlight").length}
-                </span>
-              </button>
-            </nav>
-            <div className="sidebar-bottom">
-              <div className="privacy-icon">
-                <Icon name="leaf" />
-              </div>
-              <strong>A library that’s yours.</strong>
-              <p>Local first. Private by default.</p>
-              <span className="local-badge">
-                <i /> LOCAL FIRST
-              </span>
-            </div>
-          </aside>
-          <main className="library-main">
-            <header className="library-top">
-              <span className="breadcrumb">
-                Your library <span>/</span>{" "}
-                {filter === "books"
-                  ? "Books"
-                  : filter === "documents"
-                    ? "Documents"
-                    : filter === "bookmarks"
-                      ? "Bookmarks"
-                      : "Highlights"}
-              </span>
-              <span className="top-label">
-                <Icon name="leaf" size={15} /> A little less scrolling. A little
-                more reading.
-              </span>
-            </header>
-            {filter === "books" && !collectionBooks.length && !search && (
-              <section className="welcome">
-                <div>
-                  <span className="eyebrow">MAKE ROOM FOR A GOOD BOOK</span>
-                  <h1>
-                    Your next chapter
-                    <br />
-                    starts here<span>.</span>
-                  </h1>
-                  <p>
-                    Your private book library, built around EPUB.
-                    <br className="desktop-br" /> Read MOBI books too, with PDF,
-                    DjVu and Markdown in a separate Documents collection.
-                  </p>
-                  <div className="welcome-actions">
-                    <Button
-                      onClick={() => input.current?.click()}
-                      disabled={!!busy}
-                    >
-                      <Icon name="plus" size={18} /> Import a book
-                    </Button>
-                    {driveConfigured && (
-                      <Button kind="ghost" onClick={() => setModal("drive")}>
-                        <Icon name="drive" size={18} /> Open from Drive
-                      </Button>
-                    )}
-                  </div>
-                  <span className="import-hint">
-                    Books first · EPUB & MOBI · Documents welcome · Private by
-                    default
-                  </span>
-                </div>
-                <div className="welcome-art" aria-hidden="true">
-                  <div className="art-circle" />
-                  <div className="art-book art-back">
-                    <span>
-                      THE ART
-                      <br />
-                      OF NOTICING
-                    </span>
-                    <i />
-                  </div>
-                  <div className="art-book art-front">
-                    <span className="art-small">A FIELD GUIDE TO</span>
-                    <span>
-                      the quiet
-                      <br />
-                      <em>in between.</em>
-                    </span>
-                    <div className="art-lines" />
-                    <span className="art-bottom">
-                      FOLIO EDITIONS &nbsp; / &nbsp; 01
-                    </span>
-                  </div>
-                  <span className="art-star">✳</span>
-                  <span className="art-caption">
-                    A WORLD BETWEEN THE COVERS
-                  </span>
-                </div>
-              </section>
-            )}
-            <section className="collection">
-              <div className="collection-heading">
-                <div>
-                  <h2>
-                    {filter === "books"
-                      ? "Your bookshelf"
-                      : filter === "documents"
-                        ? "Your documents"
-                        : filter === "bookmarks"
-                          ? "Your bookmarks"
-                          : "Your highlights"}{" "}
-                    <span>
-                      {collectionView
-                        ? collectionBooks.length
-                        : visibleMarks.length}
-                    </span>
-                  </h2>
-                  <p>
-                    {filter === "books"
-                      ? "An EPUB-first home for your books. Your next chapter belongs here."
-                      : filter === "documents"
-                        ? "PDF, DjVu and Markdown, with the same private reading tools."
-                        : "The passages and places worth keeping."}
-                  </p>
-                </div>
-                <div className="collection-controls">
-                  <label className="search">
-                    <Icon name="search" size={17} />
-                    <input
-                      aria-label="Search library"
-                      placeholder={
-                        filter === "books"
-                          ? "Search your books…"
-                          : filter === "documents"
-                            ? "Search your documents…"
-                            : "Search your notes…"
-                      }
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
-                  </label>
-                  {!collectionView && (
-                    <button
-                      className="text-button"
-                      disabled={!marks.length}
-                      onClick={() =>
-                        download(notesMarkdown(books, marks), "folio-notes.md")
-                      }
-                    >
-                      <Icon name="download" size={15} /> Notes as Markdown
-                    </button>
-                  )}
-                  {collectionView && (
-                    <select
-                      aria-label={
-                        filter === "books" ? "Sort books" : "Sort documents"
-                      }
-                      value={sort}
-                      onChange={(e) => setSort(e.target.value as typeof sort)}
-                    >
-                      <option value="recent">Recently read</option>
-                      <option value="added">Date added</option>
-                      <option value="title">Title A–Z</option>
-                      <option value="author">Author A–Z</option>
-                    </select>
-                  )}
-                </div>
-              </div>
-              {collectionView ? (
-                <div className="books-grid">
-                  {visibleBooks.map((book) => (
-                    <article className="book-card" key={book.id}>
-                      <button
-                        className="book-open"
-                        onClick={() => {
-                          setChapter(book.chapter);
-                          setSelectedId(book.id);
-                        }}
-                      >
-                        <span className="sr-only">Read {book.title}</span>
-                        <Cover book={book} onVisible={coverVisibility} />
-                        <span className="book-open-overlay">
-                          <Icon name="book" />
-                          Continue reading
-                        </span>
-                      </button>
-                      <div className="book-meta">
-                        <button
-                          className="book-title"
-                          title={book.title}
-                          onClick={() => {
-                            setChapter(book.chapter);
-                            setSelectedId(book.id);
-                          }}
-                        >
-                          {book.title}
-                        </button>
-                        <button
-                          className="icon-btn subtle"
-                          aria-label={`Remove ${book.title}`}
-                          onClick={() => {
-                            setDeleteId(book.id);
-                            setModal("delete");
-                          }}
-                        >
-                          <Icon name="trash" size={18} />
-                        </button>
-                        <p>{book.author}</p>
-                        <div className="book-progress">
-                          <span
-                            style={{
-                              width: `${bookProgress(book)}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="book-detail">
-                          {bookProgress(book) === 100 ? (
-                            "Finished"
-                          ) : book.format === "pdf" ||
-                            book.format === "djvu" ? (
-                            `${formatNames[book.format]} · Page ${book.chapter + 1} of ${book.chapterCount}`
-                          ) : (
-                            <>
-                              Ch. {book.chapter + 1}
-                              {book.page
-                                ? ` · Page ${book.page} of ${book.pageCount || "—"}`
-                                : ` of ${book.chapterCount}`}
-                            </>
-                          )}
-                          <span>{bytes(book.size)}</span>
-                        </span>
-                        <button
-                          className="text-button collection-move"
-                          onClick={safe(async () => {
-                            const collection =
-                              bookCollection(book) === "books"
-                                ? "documents"
-                                : "books";
-                            await updateBook(book.id, { collection });
-                            await refresh();
-                            setNotice(
-                              `Moved “${book.title}” to ${collection === "books" ? "Books" : "Documents"}.`,
-                            );
-                          })}
-                        >
-                          <Icon
-                            name={
-                              bookCollection(book) === "books"
-                                ? "document"
-                                : "book"
-                            }
-                            size={14}
-                          />
-                          Move to{" "}
-                          {bookCollection(book) === "books"
-                            ? "Documents"
-                            : "Books"}
-                        </button>
-                        <button
-                          className="text-button collection-move"
-                          aria-label={`Edit details of ${book.title}`}
-                          onClick={() => {
-                            setDetails({
-                              id: book.id,
-                              title: book.title,
-                              author: book.author,
-                            });
-                            setModal("details");
-                          }}
-                        >
-                          <Icon name="settings" size={14} />
-                          Edit details
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                  {filter === "books" &&
-                    !search &&
-                    !books.some(
-                      (b) =>
-                        b.sample ||
-                        // Samples opened before v0.6 carry no marker.
-                        (b.title === "The Quiet Atlas" &&
-                          b.author === "Folio Studio"),
-                    ) && (
-                      <article className="sample-card">
-                        <button
-                          title="Read The Quiet Atlas sample"
-                          className="sample-cover"
-                          onClick={() => void openSample()}
-                        >
-                          <Cover
-                            book={{
-                              title: "The Quiet Atlas",
-                              author: "Folio Studio",
-                            }}
-                          />
-                          <span className="sample-badge">
-                            A LITTLE SOMETHING TO START
-                          </span>
-                        </button>
-                        <div className="book-meta">
-                          <h3>The Quiet Atlas</h3>
-                          <p>An original short read by Folio Studio</p>
-                          <button
-                            className="text-button"
-                            onClick={() => void openSample()}
-                            disabled={!!busy}
-                          >
-                            Open the sample <Icon name="next" size={15} />
-                          </button>
-                        </div>
-                      </article>
-                    )}
-                  {!visibleBooks.length && search && (
-                    <div className="empty">
-                      <Icon name="search" size={30} />
-                      <h3>
-                        No {filter === "books" ? "books" : "documents"} found
-                      </h3>
-                      <p>Try another title or author.</p>
-                    </div>
-                  )}
-                  <button
-                    className="import-card"
-                    onClick={() => input.current?.click()}
-                    disabled={!!busy}
-                  >
-                    <span>
-                      <Icon name="plus" size={26} />
-                    </span>
-                    <strong>Room for one more.</strong>
-                    <p>
-                      {filter === "books"
-                        ? "Bring your next book along."
-                        : "Keep your reference reading here."}
-                    </p>
-
-                    <small>
-                      {filter === "books"
-                        ? "Import a book"
-                        : "Import a document"}
-                    </small>
-                  </button>
-                </div>
-              ) : (
-                <div className="library-notes">
-                  {visibleMarks.map((mark) => (
-                    <article className="library-note" key={mark.id}>
-                      <span className="note-eyebrow">
-                        {bookTitles.get(mark.bookId)} · {mark.chapterTitle} ·
-                        Saved {markDate(mark)}
-                      </span>
-                      <button
-                        title={mark.text}
-                        onClick={() => selectMark(mark)}
-                      >
-                        {mark.kind === "highlight"
-                          ? "“" + mark.text + "”"
-                          : mark.text}
-                      </button>
-                      <button
-                        className="icon-btn"
-                        aria-label="Delete note"
-                        onClick={safe(() => removeMark(mark.id))}
-                      >
-                        <Icon name="trash" size={16} />
-                      </button>
-                    </article>
-                  ))}
-                  {!visibleMarks.length && (
-                    <div className="empty">
-                      <Icon
-                        name={filter === "bookmarks" ? "bookmark" : "highlight"}
-                        size={32}
-                      />
-                      <h3>A place for your discoveries.</h3>
-                      <p>
-                        {filter === "bookmarks"
-                          ? "Bookmark a chapter while reading to find it here."
-                          : "Select text in a book and choose Highlight to save it here."}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
-            <footer className="library-footer">
-              <button
-                className="text-button"
-                onClick={safe(async () => {
-                  setStorage(await storageStatus());
-                  setLegacyText((await db.ocr.count()) > 0);
-                  setModal("storage");
-                })}
-              >
-                <Icon name="download" size={17} /> Storage & backup
-                {backupReminder(lastBackup, books.length) && (
-                  <span className="backup-reminder">
-                    {backupReminder(lastBackup, books.length)}
-                  </span>
-                )}
-              </button>
-              <button
-                className="text-button"
-                onClick={safe(async () =>
-                  download(
-                    notesJson(books, marks, await db.ocr.toArray()),
-                    "folio-notes.json",
-                  ),
-                )}
-              >
-                <Icon name="download" size={13} />
-                Export notes
-              </button>
-              <span className="privacy-statement">
-                Your books, documents and notes stay in this browser.
-              </span>
-            </footer>
-          </main>
+          <LibraryView
+            bookTitles={bookTitles}
+            books={books}
+            busy={busy}
+            collectionBooks={collectionBooks}
+            collectionView={collectionView}
+            coverVisibility={coverVisibility}
+            driveConfigured={driveConfigured}
+            filter={filter}
+            input={input}
+            lastBackup={lastBackup}
+            marks={marks}
+            openSample={openSample}
+            refresh={refresh}
+            removeMark={removeMark}
+            safe={safe}
+            search={search}
+            selectMark={selectMark}
+            setChapter={setChapter}
+            setDeleteId={setDeleteId}
+            setDetails={setDetails}
+            setFilter={setFilter}
+            setLegacyText={setLegacyText}
+            setModal={setModal}
+            setNotice={setNotice}
+            setSearch={setSearch}
+            setSelectedId={setSelectedId}
+            setSort={setSort}
+            setStorage={setStorage}
+            sort={sort}
+            visibleBooks={visibleBooks}
+            visibleMarks={visibleMarks}
+          />
         </>
       ) : (
         <>
@@ -2063,13 +1523,12 @@ export function App() {
               className="icon-btn"
               aria-label="Back to library"
               onClick={safe(async () => {
-                if (selectedId)
-                  await flushBookUpdates(selectedId).catch((error) =>
-                    setError(message(error)),
-                  );
-                setSelectedId(null);
-                setEngine(null);
-                await refresh();
+                await closeBook();
+                // Keep the entry for the next book instead of stepping back:
+                // a history step is asynchronous and could land on whatever
+                // is opened next.
+                if (history.state?.folio === "book")
+                  history.replaceState({ folio: "closed" }, "");
               })}
             >
               <Icon name="arrow" />
@@ -2250,213 +1709,24 @@ export function App() {
           )}
           <div className="reader-layout">
             {navigationOpen && (
-              <aside
-                className="reader-sidebar"
-                id="reader-navigation"
-                aria-label="Reading navigation"
-              >
-                <header>
-                  <span>
-                    {active && bookCollection(active) === "documents"
-                      ? "IN THIS DOCUMENT"
-                      : "IN THIS BOOK"}
-                  </span>
-                  <button
-                    className="icon-btn"
-                    aria-label="Hide navigation"
-                    onClick={() => {
-                      setNavigationOpen(false);
-                      if (fullscreen.enabled)
-                        fullscreen.ref.current
-                          ?.querySelector<HTMLButtonElement>(
-                            '.immersive-controls [aria-controls="reader-navigation"]',
-                          )
-                          ?.focus();
-                    }}
-                  >
-                    <Icon name="list" size={18} />
-                  </button>
-                </header>
-                <div
-                  className="reader-tabs"
-                  role="tablist"
-                  aria-label="Book navigation"
-                >
-                  {["contents", "bookmarks", "highlights"].map((t) => (
-                    <button
-                      role="tab"
-                      id={`reader-tab-${t}`}
-                      aria-controls="reader-navigation-panel"
-                      tabIndex={tab === t ? 0 : -1}
-                      onKeyDown={(e) => {
-                        const tabs = ["contents", "bookmarks", "highlights"];
-                        const i = tabs.indexOf(t);
-                        const next =
-                          e.key === "ArrowRight"
-                            ? tabs[(i + 1) % 3]
-                            : e.key === "ArrowLeft"
-                              ? tabs[(i + 2) % 3]
-                              : e.key === "Home"
-                                ? tabs[0]
-                                : e.key === "End"
-                                  ? tabs[2]
-                                  : undefined;
-                        if (next) {
-                          e.preventDefault();
-                          setTab(next);
-                          document
-                            .getElementById(`reader-tab-${next}`)
-                            ?.focus();
-                        }
-                      }}
-                      aria-selected={tab === t}
-                      key={t}
-                      className={tab === t ? "active" : ""}
-                      onClick={() => setTab(t)}
-                    >
-                      <Icon
-                        name={
-                          t === "contents"
-                            ? "list"
-                            : t === "bookmarks"
-                              ? "bookmark"
-                              : "highlight"
-                        }
-                        size={17}
-                      />
-                      <span>
-                        {t === "contents"
-                          ? "Contents"
-                          : t === "bookmarks"
-                            ? "Bookmarks"
-                            : "Highlights"}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <div
-                  className="reader-nav-content"
-                  id="reader-navigation-panel"
-                  role="tabpanel"
-                  aria-labelledby={`reader-tab-${tab}`}
-                  tabIndex={0}
-                >
-                  {tab === "contents" ? (
-                    <>
-                      <div className="toc-heading">TABLE OF CONTENTS</div>
-                      {fixedPages && !engine?.toc.length && (
-                        <p className="pagination-note">
-                          {engine?.linearCount} original pages. Use the page
-                          slider to go anywhere in the document.
-                        </p>
-                      )}
-                      {engine?.toc.map((n, i) => {
-                        const idx = engine.chapters.findIndex(
-                          (c) => c.href === n.href.split("#")[0],
-                        );
-                        return (
-                          <button
-                            key={i}
-                            className={`toc-item ${idx === chapter ? "active" : ""}`}
-                            style={{ paddingLeft: 16 + n.depth * 12 }}
-                            onClick={() => goHref(n.href)}
-                          >
-                            <span className="toc-number">
-                              {String(i + 1).padStart(2, "0")}
-                            </span>
-                            <span>{n.title}</span>
-                            <small className="toc-page-count">
-                              {fixedPages
-                                ? `Page ${idx + 1}`
-                                : chapterCounts[idx]
-                                  ? `${chapterCounts[idx]} ${chapterCounts[idx] === 1 ? "page" : "pages"}`
-                                  : counting
-                                    ? "…"
-                                    : "Open to count"}
-                            </small>
-                            {idx === chapter && <i />}
-                          </button>
-                        );
-                      })}
-                      {!!engine?.pages.length && (
-                        <>
-                          <div className="toc-heading">PUBLISHER PAGE LIST</div>
-                          {engine.pages.map((p, i) => (
-                            <button
-                              className="toc-item"
-                              key={i}
-                              onClick={() => goHref(p.href)}
-                            >
-                              {p.title}
-                            </button>
-                          ))}
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {bookMarks
-                        .filter(
-                          (m) =>
-                            m.kind ===
-                            (tab === "bookmarks" ? "bookmark" : "highlight"),
-                        )
-                        .map((m) => (
-                          <article className="reader-note" key={m.id}>
-                            <span>{m.chapterTitle}</span>
-                            <button
-                              className="note-link"
-                              title={m.text}
-                              onClick={() => selectMark(m)}
-                            >
-                              {(m.unresolved ||
-                                (m.chapter === chapter &&
-                                  orphanIds.includes(m.id))) && (
-                                <small>Location needs review · </small>
-                              )}
-                              {m.kind === "highlight"
-                                ? "“" + m.text + "”"
-                                : m.text}
-                            </button>
-                            <small className="note-meta">
-                              Saved {markDate(m)}
-                            </small>
-                            <button
-                              className="note-delete"
-                              aria-label="Remove annotation"
-                              onClick={safe(() => removeMark(m.id))}
-                            >
-                              <Icon name="trash" size={14} />
-                            </button>
-                          </article>
-                        ))}
-                      {!bookMarks.some(
-                        (m) =>
-                          m.kind ===
-                          (tab === "bookmarks" ? "bookmark" : "highlight"),
-                      ) && (
-                        <div className="small-empty">
-                          <Icon
-                            name={
-                              tab === "bookmarks" ? "bookmark" : "highlight"
-                            }
-                            size={25}
-                          />
-                          <p>
-                            {tab === "bookmarks"
-                              ? "Your bookmarked pages will appear here."
-                              : "Select a passage, then choose Highlight."}
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-                <div className="reader-sidebar-bottom">
-                  <Icon name="leaf" size={15} />
-                  <span>Just you and a good book.</span>
-                </div>
-              </aside>
+              <ReaderSidebar
+                active={active}
+                bookMarks={bookMarks}
+                chapter={chapter}
+                chapterCounts={chapterCounts}
+                counting={counting}
+                engine={engine}
+                fixedPages={fixedPages}
+                fullscreen={fullscreen}
+                goHref={goHref}
+                orphanIds={orphanIds}
+                removeMark={removeMark}
+                safe={safe}
+                selectMark={selectMark}
+                setNavigationOpen={setNavigationOpen}
+                setTab={setTab}
+                tab={tab}
+              />
             )}
             <main className="reader-main">
               <div className="chapter-toolbar">
@@ -2614,6 +1884,13 @@ export function App() {
                       </button>
                     )}
                   </div>
+                )}
+                {chromeHidden && pageInfo && (
+                  <span className="page-pill" aria-hidden="true">
+                    {fixedPages && engine
+                      ? `${chapter + 1} / ${engine.linearCount}`
+                      : `${pageInfo.page} / ${pageInfo.pages}`}
+                  </span>
                 )}
                 {selection && (
                   <div className="selection-bar">
@@ -2781,502 +2058,78 @@ export function App() {
         </div>
       )}
       {modal === "reading" && (
-        <Modal title="Make yourself comfortable" onClose={closeModal}>
-          <p className="reading-settings-intro">
-            A reading experience that feels like yours.
-          </p>
-          <fieldset className="reading-field">
-            <legend>READING DIRECTION</legend>
-            <div className="segmented">
-              <button
-                aria-pressed={mode === "horizontal"}
-                onClick={() => setMode("horizontal")}
-              >
-                <Icon name="next" size={17} />
-                Horizontal pages
-              </button>
-              <button
-                aria-pressed={mode === "vertical"}
-                onClick={() => setMode("vertical")}
-              >
-                <Icon name="list" size={17} />
-                Vertical reading
-              </button>
-            </div>
-          </fieldset>
-          <fieldset className="reading-field" hidden={fixedPages}>
-            <legend>
-              TEXT SIZE <span>{font}px</span>
-            </legend>
-            <div className="font-slider">
-              <button
-                className="icon-btn"
-                aria-label="A− Smaller text"
-                onClick={() => setFont((v) => Math.max(14, v - 1))}
-              >
-                A−
-              </button>
-              <input
-                type="range"
-                aria-label="Text size"
-                min="14"
-                max="36"
-                value={font}
-                onChange={(e) => setFont(Number(e.target.value))}
-              />
-              <button
-                className="icon-btn"
-                aria-label="A+ Larger text"
-                onClick={() => setFont((v) => Math.min(36, v + 1))}
-              >
-                A+
-              </button>
-            </div>
-          </fieldset>
-          <fieldset className="reading-field" hidden={fixedPages}>
-            <legend>TYPEFACE</legend>
-            <div className="font-options">
-              {(
-                [
-                  ["publisher", "Publisher", "Georgia,serif"],
-                  ["literary", "Literary", "Georgia,serif"],
-                  ["classic", "Classic", "Palatino,serif"],
-                  ["modern", "Clean", "Arial,sans-serif"],
-                ] as const
-              ).map(([id, label, family]) => (
-                <button
-                  key={id}
-                  style={{ fontFamily: family }}
-                  aria-label={label}
-                  aria-pressed={fontChoice === id}
-                  onClick={() => setFontChoice(id)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-          <fieldset className="reading-field">
-            <legend>BOOK PAGE APPEARANCE</legend>
-            <div className="theme-options">
-              {(["paper", "sepia", "night"] as const).map((t) => (
-                <button
-                  className={`theme-${t}`}
-                  key={t}
-                  aria-label={
-                    t === "paper" ? "Paper" : t === "sepia" ? "Sepia" : "Night"
-                  }
-                  aria-pressed={theme === t}
-                  onClick={() => setTheme(t)}
-                >
-                  {t === "paper" ? "Paper" : t === "sepia" ? "Sepia" : "Night"}
-                </button>
-              ))}
-            </div>
-            <p className="fine-print">
-              Applies to the reading pages. The library and controls follow the
-              Interface setting below.
-            </p>
-          </fieldset>
-          {fixedPages && (
-            <p className="fine-print">
-              PDF and DjVu keep their original page layout and type size. Use
-              the zoom controls to enlarge the page.
-            </p>
-          )}
-          <div className="reading-detail-controls">
-            <label>
-              Interface
-              <select
-                aria-label="Interface appearance"
-                value={interfaceTheme}
-                onChange={(e) =>
-                  setInterfaceTheme(e.target.value as InterfaceTheme)
-                }
-              >
-                <option value="system">Follow device</option>
-                <option value="pages">Match page theme</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </label>
-            <label hidden={fixedPages || mode !== "horizontal"}>
-              Wide windows
-              <select
-                aria-label="Pages in wide windows"
-                value={spread ? "two" : "one"}
-                onChange={(e) => setSpread(e.target.value === "two")}
-              >
-                <option value="one">One page</option>
-                <option value="two">Two pages</option>
-              </select>
-            </label>
-          </div>
-          <div className="reading-detail-controls" hidden={fixedPages}>
-            <label>
-              Line spacing
-              <select
-                aria-label="Line spacing"
-                value={spacing}
-                onChange={(e) => setSpacing(Number(e.target.value))}
-              >
-                <option value="1.4">Compact</option>
-                <option value="1.7">Relaxed</option>
-                <option value="2">Spacious</option>
-              </select>
-            </label>
-            <label>
-              Margins
-              <select
-                aria-label="Reading margins"
-                value={margin}
-                onChange={(e) =>
-                  setMargin(e.target.value as ReadingSettings["margin"])
-                }
-              >
-                <option value="narrow">Narrow</option>
-                <option value="comfortable">Comfortable</option>
-                <option value="wide">Wide</option>
-              </select>
-            </label>
-          </div>
-          <p className="fine-print">
-            Page counts adapt to your text settings and window size. Your place
-            follows the text when the layout changes.
-          </p>
-          <div className="modal-actions">
-            <Button
-              kind="secondary"
-              onClick={() => {
-                setFont(22);
-                setMode("horizontal");
-                setFontChoice("publisher");
-                setSpacing(1.7);
-                setMargin("comfortable");
-                setTheme("paper");
-                setSpread(false);
-              }}
-            >
-              Reset reading settings
-            </Button>
-            <Button onClick={closeModal}>Done</Button>
-          </div>
-        </Modal>
+        <ReadingSettingsDialog
+          closeModal={closeModal}
+          fixedPages={fixedPages}
+          preferences={preferences}
+        />
       )}
       {modal === "drive" && (
-        <Modal title="Your books, from Drive" onClose={closeModal}>
-          <div className="modal-illustration">
-            <Icon name="drive" size={36} />
-          </div>
-          <div>
-            <p>
-              Bring a document from Google Drive into your private library. Your
-              original file stays unchanged.
-            </p>
-            <label className="field-label" htmlFor="drive-link">
-              GOOGLE DRIVE FILE LINK
-            </label>
-            <input
-              className="text-input"
-              id="drive-link"
-              placeholder="https://drive.google.com/file/d/…"
-              value={driveLink}
-              onChange={(e) => setDriveLink(e.target.value)}
-            />
-            <p className="fine-print">
-              Google sign-in is required. This version requests read-only Drive
-              access to download the file you choose. Your library stays in this
-              browser.
-            </p>
-            {driveBusy && <p role="status">{driveBusy}</p>}
-            <div className="modal-actions">
-              <Button kind="secondary" onClick={closeModal}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => void runDrive()}
-                disabled={!driveLink.trim() || !!driveBusy}
-              >
-                <Icon name="drive" size={17} />
-                {driveBusy ? "Connecting…" : "Connect & open"}
-              </Button>
-            </div>
-          </div>
-        </Modal>
+        <DriveDialog
+          closeModal={closeModal}
+          driveBusy={driveBusy}
+          driveLink={driveLink}
+          runDrive={runDrive}
+          setDriveLink={setDriveLink}
+        />
       )}
       {modal === "storage" && (
-        <Modal title="Storage & backup" onClose={closeModal}>
-          <p>
-            Your books and notes are stored in this browser. A backup includes
-            original files, reading positions and annotations
-            {legacyText ? ", and previously saved recognition text" : ""}.
-          </p>
-          <p>
-            {lastBackup
-              ? `Last full backup: ${new Date(lastBackup.at).toLocaleDateString(undefined, { dateStyle: "medium" })}.`
-              : "No full backup has been made in this browser yet."}
-          </p>
-          <p role="status">
-            {storage?.persistent
-              ? "Storage is protected from automatic eviction."
-              : "Storage is best effort; the browser has not granted persistence."}{" "}
-            {storage
-              ? `${bytes(storage.usage)} used${storage.quota ? ` of ${bytes(storage.quota)}` : ""}.`
-              : ""}
-          </p>
-          <p className="fine-print">
-            Private browsing may remove your library when private tabs close.
-            Use a regular tab and keep backups for a lasting library.{" "}
-            Persistence does not protect against clearing browser data,
-            uninstalling the extension or losing this device. Keep a backup
-            somewhere safe. Backups are not encrypted. Restore accepts archives
-            below 2 GB and merges with existing books and notes.
-          </p>
-          <label className="field-label" htmlFor="backup-scope">
-            What to back up
-          </label>
-          <select
-            id="backup-scope"
-            className="text-input"
-            value={backupScope}
-            onChange={(e) => setBackupScope(e.target.value)}
-          >
-            <option value="">Entire library</option>
-            {books.map((book) => (
-              <option key={book.id} value={book.id}>
-                {book.title}
-              </option>
-            ))}
-          </select>
-          {busy && <p role="status">{busy}</p>}
-          <div className="modal-actions">
-            <Button
-              kind="secondary"
-              disabled={!!busy}
-              onClick={safe(async () => {
-                setStorage(await storageStatus(true));
-              })}
-            >
-              Protect storage
-            </Button>
-            <Button
-              kind="secondary"
-              disabled={!!busy}
-              onClick={() => restoreInput.current?.click()}
-            >
-              Restore / import notes
-            </Button>
-            <Button
-              disabled={!!busy || !books.length}
-              onClick={safe(async () => {
-                setBusy("Backing up your library…");
-                try {
-                  download(
-                    await backupLibrary(backupScope || undefined),
-                    `folio-library-${new Date().toISOString().slice(0, 10)}.folio`,
-                  );
-                  if (!backupScope) {
-                    const record = { at: Date.now(), items: books.length };
-                    writePreference(
-                      "folio-last-backup",
-                      JSON.stringify(record),
-                    );
-                    setLastBackup(record);
-                  }
-                  setNotice(
-                    "Backup created. Keep the downloaded file somewhere safe.",
-                  );
-                } finally {
-                  setBusy("");
-                }
-              })}
-            >
-              Back up library
-            </Button>
-          </div>
-        </Modal>
+        <StorageDialog
+          backupScope={backupScope}
+          books={books}
+          busy={busy}
+          closeModal={closeModal}
+          lastBackup={lastBackup}
+          legacyText={legacyText}
+          restoreInput={restoreInput}
+          safe={safe}
+          setBackupScope={setBackupScope}
+          setBusy={setBusy}
+          setLastBackup={setLastBackup}
+          setNotice={setNotice}
+          setStorage={setStorage}
+          storage={storage}
+        />
       )}
       {modal === "delete" && (
-        <Modal title={`Remove this ${deleteNoun}?`} onClose={closeModal}>
-          <p>
-            This removes the local copy of{" "}
-            <strong>{deleteTarget?.title}</strong> and its bookmarks and
-            highlights. Your original file is unchanged.
-          </p>
-          <div className="modal-actions">
-            <Button kind="secondary" onClick={closeModal}>
-              Keep {deleteNoun}
-            </Button>
-            <Button
-              kind="danger"
-              onClick={safe(async () => {
-                if (deleteId) await removeBook(deleteId);
-                setModal(null);
-                await refresh();
-                setNotice(
-                  `${deleteNoun === "book" ? "Book" : "Document"} removed from this browser.`,
-                );
-              })}
-            >
-              Remove {deleteNoun}
-            </Button>
-          </div>
-        </Modal>
+        <DeleteDialog
+          closeModal={closeModal}
+          deleteId={deleteId}
+          deleteNoun={deleteNoun}
+          deleteTarget={deleteTarget}
+          refresh={refresh}
+          safe={safe}
+          setModal={setModal}
+          setNotice={setNotice}
+        />
       )}
       {modal === "details" && (
-        <Modal title="Edit details" onClose={closeModal}>
-          <p>
-            Change how this item is listed in your library. The original file is
-            not modified.
-          </p>
-          <label className="field-label" htmlFor="details-title">
-            Title
-          </label>
-          <input
-            className="text-input"
-            id="details-title"
-            maxLength={500}
-            value={details.title}
-            onChange={(e) => setDetails({ ...details, title: e.target.value })}
-          />
-          <label className="field-label" htmlFor="details-author">
-            Author
-          </label>
-          <input
-            className="text-input"
-            id="details-author"
-            maxLength={500}
-            value={details.author}
-            onChange={(e) => setDetails({ ...details, author: e.target.value })}
-          />
-          <div className="modal-actions">
-            <Button kind="secondary" onClick={closeModal}>
-              Cancel
-            </Button>
-            <Button
-              disabled={!details.title.trim()}
-              onClick={safe(async () => {
-                await updateBook(details.id, {
-                  title: details.title.trim(),
-                  author: details.author.trim() || "Unknown author",
-                });
-                setModal(null);
-                await refresh();
-                setNotice("Details saved.", "success");
-              })}
-            >
-              Save details
-            </Button>
-          </div>
-        </Modal>
+        <DetailsDialog
+          closeModal={closeModal}
+          details={details}
+          refresh={refresh}
+          safe={safe}
+          setDetails={setDetails}
+          setModal={setModal}
+          setNotice={setNotice}
+        />
       )}
       {modal === "print" && (
-        <Modal title="From a good book to paper" onClose={closeModal}>
-          <div className="modal-illustration">
-            <Icon name="print" size={34} />
-          </div>
-          <p>
-            Open a clean print layout, then choose <strong>Save as PDF</strong>{" "}
-            in the browser’s print dialog.{" "}
-            {fixedPages
-              ? "DjVu creates a raster image of the current page; text will not be selectable."
-              : "Reflowable text stays selectable and available original images are used."}
-          </p>
-          <div className="radio-options">
-            <label>
-              <input
-                type="radio"
-                name="scope"
-                disabled={!!busy}
-                checked={printScope === "chapter"}
-                onChange={() => {
-                  setPrintScope("chapter");
-                  setPrintReview([]);
-                }}
-              />
-              <span>
-                <strong>
-                  {fixedPages ? "Current page" : "Current chapter"}
-                </strong>
-                <small>{engine?.chapters[chapter]?.title}</small>
-              </span>
-            </label>
-            <label hidden={fixedPages}>
-              <input
-                type="radio"
-                name="scope"
-                disabled={!!busy}
-                checked={printScope === "book"}
-                onChange={() => {
-                  setPrintScope("book");
-                  setPrintReview([]);
-                }}
-              />
-              <span>
-                <strong>Whole book</strong>
-                <small>
-                  {engine?.linearCount} chapters · Larger books take longer
-                </small>
-              </span>
-            </label>
-          </div>
-          <p className="fine-print">
-            {fixedPages
-              ? "DjVu printing creates a raster copy of the current page. "
-              : ""}
-            Print pagination may differ from the reading view. Large image-heavy
-            books are best printed chapter by chapter. Highlights and saved
-            notes are not included in this version.
-          </p>
-          {!!printReview.length && (
-            <div className="print-review" role="status">
-              <h3>Review before printing</h3>
-              <p>
-                The layout may differ or omit content. Continue only if these
-                limitations are acceptable.
-              </p>
-              <ul>
-                {printReview.map((issue, i) => (
-                  <li key={i}>
-                    {issue.level === "lossy"
-                      ? "Missing content: "
-                      : "Formatting: "}
-                    {issue.message}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div className="modal-actions">
-            <Button kind="secondary" onClick={closeModal}>
-              Cancel
-            </Button>
-            {engine?.format === "djvu" && active && (
-              <Button
-                kind="secondary"
-                onClick={safe(async () => {
-                  const source =
-                    openedBook.current || (await getBook(active.id));
-                  if (source)
-                    download(
-                      source.blob,
-                      active.fileName || `${active.title}.djvu`,
-                    );
-                })}
-              >
-                Download original DjVu
-              </Button>
-            )}
-            <Button
-              onClick={() => void print(!!printReview.length)}
-              disabled={!!busy}
-            >
-              <Icon name="print" size={17} />
-              {busy ||
-                (printReview.length ? "Print anyway" : "Open print dialog")}
-            </Button>
-          </div>
-        </Modal>
+        <PrintDialog
+          active={active}
+          busy={busy}
+          chapter={chapter}
+          closeModal={closeModal}
+          engine={engine}
+          fixedPages={fixedPages}
+          openedBook={openedBook}
+          print={print}
+          printReview={printReview}
+          printScope={printScope}
+          safe={safe}
+          setPrintReview={setPrintReview}
+          setPrintScope={setPrintScope}
+        />
       )}
     </div>
   );

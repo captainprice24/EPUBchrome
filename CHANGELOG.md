@@ -14,6 +14,10 @@ Reading
 - Warnings stay until dismissed. Other notices last 6 seconds instead of 4.5 and wait while their close button is hovered or focused. Notices still let clicks through to the page beneath them.
 - Bookmark positions are resolved once per loaded chapter. Previously each render re-read and re-hashed the chapter text for every bookmark.
 - Background page counting restarts only when the layout changes, not when the page theme does.
+- On a touch screen, a tap in the middle of the page hides or shows all controls so the page can fill the screen, and taps on the sides turn pages in horizontal reading.
+- The browser's Back button returns from a book to the library.
+- Highlights are re-applied only when the open chapter's own highlights change, in one pass over the text.
+- Secondary text is at least 13 px (was 12 px) and capital labels at least 12 px.
 
 Library
 
@@ -26,6 +30,7 @@ Library
 - An empty backup can no longer be created after the selected item was removed.
 - The sample is recognized by a stored marker instead of its title, and its badge no longer covers the cover's author line.
 - All four library sections announce the current one to screen readers; the brand is a button.
+- The library and notes follow changes made in another tab of the web version without a reload.
 
 Extension and package
 
@@ -38,7 +43,9 @@ Development
 
 - Folio is now licensed under the Apache License 2.0.
 - Installing, building and packaging no longer need Python; `scripts/demo.mjs` and `scripts/package.mjs` replace the Python scripts, and the sample book is built reproducibly. Node.js 22 or later is supported.
-- Added `npm run lint` (Oxlint with React hook rules), `npm run test:unit` (Vitest) and both to CI, with `npm audit`. Unused locals and parameters are TypeScript errors.
+- Split the main component into `LibraryView`, `ReaderSidebar`, six dialogs, UI primitives and a preferences hook. The v0.2 renderer moved to a module that loads only for books last opened by an older version.
+- Added `npm run lint` (Oxlint with React hook rules, no warnings allowed), `npm run test:unit` (Vitest, 42 tests), `npm run test:extension` (the built extension loaded in Chromium) and all three to CI, with `npm audit`. Unused locals and parameters are TypeScript errors.
+- Workflow actions are pinned to commit hashes. The extension's name, store summary and tooltip moved to `public/_locales` so they can be translated.
 - Added a release workflow for `v*` tags, Dependabot configuration, `SECURITY.md`, and issue and pull-request templates.
 - Rewrote the README; moved the audits, responses, research and earlier validation records to `docs/history/`.
 

@@ -1,5 +1,6 @@
 import { db, type Book } from "./store";
-import { Epub, readerDocument } from "./epub";
+import { type Epub, readerDocument } from "./epub";
+import { renderLegacy } from "./legacy-render";
 import { documentText, locatorFactory, RENDERER_VERSION } from "./locators";
 import { persistBookWrites } from "./binary-storage";
 
@@ -19,7 +20,7 @@ export async function migrateLocators(book: Book, epub: Epub) {
     try {
       const href = epub.chapters[chapter]?.href;
       if (!href) continue;
-      const output = await epub.renderLegacy(chapter);
+      const output = await renderLegacy(epub, chapter);
       const doc = new DOMParser().parseFromString(
         readerDocument(output.html),
         "text/html",

@@ -19,7 +19,7 @@ Installation prepares pinned PDF/DjVu assets and the original sample. `public/do
 | --- | --- |
 | `npm ci` | Reproduce the lockfile and prepare local decoder/sample assets |
 | `npm run dev` | Start WXT development mode |
-| `npm run lint` | Static checks with Oxlint, including the React hook rules |
+| `npm run lint` | Static checks with Oxlint, including the React hook rules; warnings fail |
 | `npm run typecheck` | Generate WXT types and run strict TypeScript checks; unused code is an error |
 | `npm run test:unit` | Unit tests for pure modules (`tests/unit`) |
 | `npm run build` | Build `.output/chrome-mv3` |
@@ -31,7 +31,7 @@ Installation prepares pinned PDF/DjVu assets and the original sample. `public/do
 | `npm run package` | Build and create the portable extension ZIP |
 | `npm run format` | Format TypeScript, React, styles and JavaScript helpers |
 
-Run `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run build` and `npm test` before submitting a code change. `npm run lint` allows the eight existing hook-dependency warnings in `src/App.tsx` and fails on a ninth; fix a warning instead of raising the limit. Put logic that needs no browser in its own module with a unit test instead of adding it to `App.tsx`. The test server serves the built files, so rebuild after changing source. The test suite manages its own server and browser processes.
+Run `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run build` and `npm test` before submitting a code change. `npm run lint` fails on any warning. If an effect deliberately leaves a value out of its dependency list, say why in a comment above an `oxlint-disable-next-line` line. Put logic that needs no browser in its own module with a unit test, and new screens or dialogs in their own component, instead of adding them to `App.tsx`. The test server serves the built files, so rebuild after changing source. The test suite manages its own server and browser processes.
 
 ## Browser tests
 
@@ -54,7 +54,10 @@ The main suite serves the built files over HTTP with the manifest’s script CSP
 | --- | --- |
 | `entrypoints/background.ts` | Opens the reader after installation and from the toolbar |
 | `entrypoints/reader` | React application entrypoint |
-| `src/App.tsx`, `src/style.css` | Library, reader and interaction UI |
+| `src/App.tsx`, `src/style.css` | Application state, the reader and its wiring; styles |
+| `src/LibraryView.tsx`, `src/ReaderSidebar.tsx`, `src/dialogs.tsx`, `src/ui.tsx` | The library, the reader's contents and notes panel, the six dialogs, shared UI primitives |
+| `src/usePreferences.ts` | Reading and appearance preferences and their storage |
+| `src/legacy-render.ts`, `src/migrate-locators.ts` | One-time conversion of notes saved by v0.2; loaded on demand |
 | `src/epub.ts` | Bounded ZIP access, EPUB parsing and sandboxed resource preparation |
 | `src/documents.ts`, `document-types.ts` | Document factory, format detection and size limits |
 | `src/reflow-document.ts`, `mobi-worker.ts` | Markdown/MOBI preparation with unchanged originals |

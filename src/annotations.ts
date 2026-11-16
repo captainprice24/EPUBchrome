@@ -52,17 +52,43 @@ export function applyHighlights(doc: Document, marks: Mark[]) {
     }
     return [{ ...mark, ...range }];
   });
+  // Index the text nodes once. Marks are wrapped from the end of the chapter
+  // backwards, so wrapping one never moves the text of an earlier mark. Only a
+  // mark that overlaps the previous one needs a fresh index.
+  const index = () => {
+    let cursor = 0;
+    return nodes(doc).map((node) => {
+      const item = { node, start: cursor };
+      cursor += node.length;
+      return item;
+    });
+  };
+  let list = index(),
+    wrappedFrom = Infinity;
   for (const mark of [...resolved].sort(
     (a, b) => (b.start || 0) - (a.start || 0),
   )) {
     if (mark.start === undefined || mark.end === undefined) continue;
-    let cursor = 0;
+    if (mark.end > wrappedFrom) list = index();
+    wrappedFrom = mark.start;
+    let low = 0,
+      high = list.length - 1,
+      first = list.length;
+    while (low <= high) {
+      const middle = (low + high) >> 1,
+        item = list[middle]!;
+      if (item.start + item.node.length > mark.start) {
+        first = middle;
+        high = middle - 1;
+      } else low = middle + 1;
+    }
     const selected: { node: Text; from: number; to: number }[] = [];
-    for (const node of nodes(doc)) {
-      const from = Math.max(0, mark.start - cursor),
-        to = Math.min(node.length, mark.end - cursor);
+    for (let i = first; i < list.length; i++) {
+      const { node, start } = list[i]!;
+      if (start >= mark.end) break;
+      const from = Math.max(0, mark.start - start),
+        to = Math.min(node.length, mark.end - start);
       if (to > from) selected.push({ node, from, to });
-      cursor += node.length;
     }
     for (const { node, from, to } of selected.reverse()) {
       const range = doc.createRange();

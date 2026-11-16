@@ -27,7 +27,7 @@ To try it without installing, use the [web version](https://captainprice24.githu
 | Area | What you get |
 | --- | --- |
 | Library | Separate Books and Documents shelves, covers or first-page previews, search, sorting by title, author or date, editable title and author, import of several files at once |
-| Reading | Horizontal pages or vertical scrolling, one or two pages in wide windows, text size, typeface, spacing, margins, Paper, Sepia and Night pages, fullscreen |
+| Reading | Horizontal pages or vertical scrolling, one or two pages in wide windows, text size, typeface, spacing, margins, Paper, Sepia and Night pages, fullscreen; on touch screens, tap to turn pages or hide the controls |
 | Finding your place | Contents, publisher page lists, page counts per chapter, a saved place that survives changes of text size and window, find in chapter with next and previous |
 | Bookmarks and highlights | Anchored to the passage, listed in reading order, exportable as Markdown or JSON |
 | PDF and DjVu | Original pages with zoom, text selection where the file has text, PDF outlines and links |

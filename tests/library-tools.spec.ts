@@ -289,3 +289,137 @@ test("the interface can match the page theme; wide windows can show two pages", 
   await page.setViewportSize({ width: 900, height: 860 });
   await expect.poll(pages).toBeGreaterThan(spread);
 });
+
+test("on a touch screen, taps turn pages and hide or show the controls", async ({
+  browser,
+}) => {
+  execFileSync("python3", ["scripts/fixtures.py"]);
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto("/reader.html");
+    await page
+      .getByLabel("Import document file")
+      .setInputFiles(path.resolve("test-results/fixtures/long.epub"));
+    await expect(page.locator(".page-count")).toHaveText(/^Page 1 of \d+/);
+    const total = Number(
+      (await page.locator(".page-count").innerText()).split(" of ")[1],
+    );
+    const app = page.locator(".app");
+    const box = (await page
+      .locator('iframe[title="Book chapter"]')
+      .boundingBox())!;
+    const tap = (share: number) =>
+      page.touchscreen.tap(box.x + box.width * share, box.y + box.height * 0.5);
+
+    // The sides turn pages and leave the controls alone.
+    await tap(0.9);
+    await expect(page.locator(".page-count")).toHaveText(/^Page 2 of/);
+    await tap(0.9);
+    await expect(page.locator(".page-count")).toHaveText(/^Page 3 of/);
+    await tap(0.1);
+    await expect(page.locator(".page-count")).toHaveText(/^Page 2 of/);
+    await expect(app).not.toHaveClass(/chrome-hidden/);
+
+    // The middle hides every control; the page then fills the screen.
+    await tap(0.5);
+    await expect(app).toHaveClass(/chrome-hidden/);
+    await expect(page.locator(".reader-top")).toBeHidden();
+    await expect(page.locator(".reader-footer")).toBeHidden();
+    await expect(page.locator(".page-pill")).toBeVisible();
+    await expect
+      .poll(async () => {
+        const full = await page
+          .locator('iframe[title="Book chapter"]')
+          .boundingBox();
+        return Math.round(full!.height);
+      })
+      .toBe(844);
+    // The taller page holds more text, so the chapter has fewer pages and
+    // the same passage sits on an earlier one. The sides still turn pages.
+    const pill = async () => {
+      const [current, total] = (await page.locator(".page-pill").innerText())
+        .split(" / ")
+        .map(Number);
+      return { current: current!, total: total! };
+    };
+    await expect.poll(async () => (await pill()).total).toBeLessThan(total);
+    const hidden = await pill();
+    expect(hidden.current).toBeLessThanOrEqual(2);
+    await tap(0.9);
+    await expect
+      .poll(async () => (await pill()).current)
+      .toBe(hidden.current + 1);
+    await tap(0.5);
+    await expect(app).not.toHaveClass(/chrome-hidden/);
+    await expect(page.locator(".reader-top")).toBeVisible();
+    await expect(page.locator(".page-count")).toHaveText(/^Page \d+ of/);
+
+    // A mouse click is not a tap: it never hides the controls.
+    await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await expect(app).not.toHaveClass(/chrome-hidden/);
+  } finally {
+    await context.close();
+  }
+});
+
+test("a second tab follows imports and notes made in the first", async ({
+  context,
+}) => {
+  const first = await context.newPage(),
+    second = await context.newPage();
+  await first.goto("/reader.html");
+  await second.goto("/reader.html");
+  const count = (name: string) =>
+    second
+      .locator(".library-sidebar nav button", { hasText: name })
+      .locator("span");
+  await expect(count("Books")).toHaveText("0");
+
+  await openSample(first);
+  await expect(count("Books")).toHaveText("1");
+  await expect(second.locator(".book-card")).toContainText("The Quiet Atlas");
+
+  await highlightParagraph(first, 2);
+  await expect(count("Highlights")).toHaveText("1");
+  await second.getByRole("button", { name: "Highlights" }).click();
+  await expect(second.locator(".library-note")).toContainText(
+    "This is a small atlas",
+  );
+});
+
+test("the browser's Back button returns from a book to the library", async ({
+  page,
+}) => {
+  await openSample(page);
+  await page.getByRole("button", { name: "Next chapter" }).click();
+  await expect(
+    book(page).getByRole("heading", { name: "The shape of a place" }),
+  ).toBeVisible();
+  // The place is saved when the new chapter's pages are laid out.
+  await expect(page.locator(".page-count")).toHaveText(/^Page 1 of \d+/);
+  await page.goBack();
+  await expect(page.locator(".book-card")).toContainText("The Quiet Atlas");
+  await expect(page).toHaveURL(/reader\.html$/);
+  // The place was saved before leaving.
+  await expect(page.locator(".book-detail")).toContainText("Ch. 2");
+
+  // The app's own button reuses that one history entry for the next book,
+  // so entries do not pile up with every book opened.
+  const entries = await page.evaluate(() => history.length);
+  for (let i = 0; i < 2; i++) {
+    await page.locator(".book-open").click();
+    await expect(page.locator(".chapter-location")).toContainText("Chapter 2");
+    await page.getByRole("button", { name: "Back to library" }).click();
+    await expect(page.locator(".book-card")).toBeVisible();
+  }
+  expect(await page.evaluate(() => history.length)).toBe(entries);
+  await page.locator(".book-open").click();
+  await expect(page.locator(".chapter-location")).toContainText("Chapter 2");
+  await page.goBack();
+  await expect(page.locator(".book-card")).toBeVisible();
+});

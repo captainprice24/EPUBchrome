@@ -54,3 +54,4 @@ export function useReaderFullscreen(active: boolean) {
   }, [active, exit]);
   return { ref, enabled, fallback, toggle, exit };
 }
+export type ReaderFullscreen = ReturnType<typeof useReaderFullscreen>;

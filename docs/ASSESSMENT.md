@@ -12,9 +12,9 @@ This page lists every finding with its status after v0.6.0. Evidence line number
 
 | Status | Count | Findings |
 | --- | --- | --- |
-| Fixed | 28 | B-1 to B-8, U-1 to U-5, U-7 to U-9, P-1, P-3, C-4, K-1, K-3, T-1, T-2, T-3, R-2, R-3, R-4, A-1, A-2 |
-| Partly done | 7 | U-6, C-1, C-2, K-4, K-5, T-4, R-5 |
-| Open | 7 | P-2, P-4, C-3, K-2, R-1, A-3, A-4 |
+| Fixed | 37 | B-1 to B-8, U-1 to U-9, P-1 to P-3, C-1 to C-4, K-1 to K-3, T-1 to T-4, R-2, R-3, R-4, A-1, A-2, A-3 |
+| Partly done | 4 | K-4, K-5, R-5, A-4 |
+| Open or closed without change | 2 | R-1 (owner decision), P-4 (reassessed, no change) |
 
 Opportunities are tracked separately in [the last section](#opportunities).
 
@@ -48,32 +48,32 @@ Opportunities are tracked separately in [the last section](#opportunities).
 | U-3 | The only protection against losing the library was a backup the user had to remember | **Fixed, first step.** The date of the last full backup is recorded and shown; the Storage & backup button carries a reminder when items are uncovered or the backup is over 30 days old. A linked backup folder remains an opportunity (F-5) |
 | U-4 | The sample card's badge covered the author line | **Fixed** |
 | U-5 | The sample was detected by title and author | **Fixed.** A stored marker identifies it; samples opened before v0.6 are still matched by title. The marker is not part of a backup |
-| U-6 | On a phone the header, toolbar and footer take about 230 px and notices cover the text | **Partly done.** The match counter is hidden on narrow screens so the search field keeps its width. Hiding the controls while reading and showing them on a tap is not done |
+| U-6 | On a phone the header, toolbar and footer take about 230 px and notices cover the text | **Fixed.** On a touch screen a tap in the middle of the page hides every control and the page fills the screen; a second tap brings them back. In horizontal reading, taps on the sides turn pages. A small page indicator stays visible. Mouse clicks are unaffected. Notices can still overlap the page for a few seconds |
 | U-7 | No two-page spread on wide screens | **Fixed.** Optional, off by default, for horizontal reading in windows from 1100 px |
 | U-8 | Bookmarks were called "Saved" in the reader; tab tooltips showed raw ids | **Fixed** |
 | U-9 | Library sort and PDF zoom were not remembered | **Fixed.** Sort is remembered; zoom is stored per document. Reading preferences are still global and not part of a backup |
 
-Still open from earlier reviews: reloading returns to the library instead of the open book, and the browser Back button is not wired.
+Also fixed from earlier reviews: the browser's Back button now returns from a book to the library. Reloading still returns to the library, not to the open book; that is kept so a book that fails to open can never trap the app on reload.
 
 ## Performance
 
 | ID | Finding in v0.5.1 | Status in v0.6.0 |
 | --- | --- | --- |
 | P-1 | Each render re-read the chapter text and computed its SHA-256 for every bookmark in the chapter (`App.tsx:1078-1095`) | **Fixed.** Text, fingerprint and bookmark offsets are computed once per loaded chapter |
-| P-2 | Every bookmark or highlight reloads all book metadata and all marks, and re-applies all highlights | **Open.** Needs Dexie live queries and per-book queries; best done with the component split (C-1) |
+| P-2 | Every bookmark or highlight reloads all book metadata and all marks, and re-applies all highlights | **Fixed.** Highlights are re-applied only when the open chapter's own set changes, and applying them is a single pass over the text instead of one pass per highlight. The library and notes follow database changes live, so a second tab of the web version stays current. Marks are still held as one list; that is fine for thousands of notes |
 | P-3 | Changing the page theme restarted background page counting | **Fixed.** The count restarts only when the layout key changes. Counting still lays out every chapter once per layout |
-| P-4 | Restore holds every restored file in memory before one atomic write (`backup.ts:266`, `383`) | **Open.** Streaming needs a restore journal to keep failures recoverable; this is a design change, not a patch |
+| P-4 | Restore holds every restored file in memory before one atomic write (`backup.ts:266`, `383`) | **Closed without change; the finding was overstated.** The restored files are browser-managed Blobs, which Chrome keeps on disk when they are large, not in JavaScript memory. Making restore stream book by book would give up the guarantee that a failed restore leaves nothing behind. The tested, atomic restore stays |
 
 ## Code and architecture
 
 | ID | Finding in v0.5.1 | Status in v0.6.0 |
 | --- | --- | --- |
-| C-1 | `App.tsx` was one 2,966-line component with no linter | **Partly done.** A lint baseline exists (T-1). New logic went into separate modules (`find`, `marks`, `progress`, `prefs`, `notes-export`) instead of the component. The component itself grew with the new dialogs and is still to be split |
-| C-2 | No unit tests | **Partly done.** Vitest runs 20 tests of the new pure modules. `locators.ts`, `xhtml.ts`, `publisher-css.ts` and the backup validators need a DOM environment and are still covered only through the browser |
-| C-3 | The v0.2 renderer (`epub.ts:333-476`) and the `books` and `ocr` tables stay on the main path | **Open** |
+| C-1 | `App.tsx` was one 2,966-line component with no linter | **Fixed.** The component is split: `LibraryView.tsx`, `ReaderSidebar.tsx`, `dialogs.tsx` (six dialogs), `ui.tsx`, `usePreferences.ts`, plus the logic modules `find`, `marks`, `progress`, `prefs`, `notes-export`. `App.tsx` keeps the reader and the wiring (about 2,150 lines, down from 3,345 after the new features). The linter reports no warnings; four effects carry a written reason for their dependency list |
+| C-2 | No unit tests | **Fixed.** 42 Vitest tests cover chapter search, note ordering, progress, backup reminders, text locators, publisher CSS rewriting, archive paths, format detection and the Markdown export. `xhtml.ts` and the backup validators need a real XML parser and stay covered through the browser |
+| C-3 | The v0.2 renderer (`epub.ts:333-476`) and the `books` and `ocr` tables stay on the main path | **Fixed for the code.** The old renderer moved to `legacy-render.ts` and loads, with the migration, only for a book last opened by an older version. The `books` and `ocr` tables stay: they hold original files and text that existing libraries still read |
 | C-4 | Unused imports and a stray block | **Fixed.** `noUnusedLocals` and `noUnusedParameters` are on |
 
-Suggested order for the split, one pull request each: dialogs as components; `LibraryView` and `ReaderView`; hooks `useLibrary`, `useReaderEngine`, `useAnnotations`, `usePreferences`; then resolve the eight hook-dependency warnings the linter reports.
+A further step, when the reader itself is next changed: move the reader's loading, pagination and annotation logic into hooks (`useReaderEngine`, `useAnnotations`) and its toolbar and footer into components.
 
 ## Build, package and dependencies
 
@@ -82,8 +82,8 @@ Suggested order for the split, one pull request each: dialogs as components; `Li
 | K-1 | About 2.2 MB of the 8.9 MB package was never loaded: duplicate DjVu decoders, the PDF.js scripting sandbox, no-WebAssembly fallbacks | **Fixed.** 6.6 MB unpacked. The packaging script fails if those files return |
 | K-2 | There was no licence, while the contributing guide invited contributions | **Fixed.** Apache License 2.0, chosen by the owner: `LICENSE`, `NOTICE`, `package.json`, and a copy in every build |
 | K-3 | The main bundle carried the whole CSS grammar | **Fixed.** Parser, walker and generator are imported separately; the main chunk went from 866 KB to 754 KB |
-| K-4 | Python was required to install and package a Node project | **Partly done.** Install, build and packaging are Node only, and Node 22 is supported. The test fixtures, the public corpus and the CI failure summary still use Python |
-| K-5 | Drive import ships switched off and unverified | **Partly done.** It loads on demand and handles expired tokens. Rebuilding it on the Google Picker with the `drive.file` scope, or removing it, is still to be decided |
+| K-4 | Python was required to install and package a Node project | **Partly done, by choice.** Install, build and packaging are Node only, and Node 22 is supported. The browser tests still build their fixtures with Python, inline in about twenty places; rewriting them would risk the tests themselves for no benefit to users |
+| K-5 | Drive import ships switched off and unverified | **Partly done; owner decision.** It loads on demand and handles expired tokens. Whether to rebuild it on the Google Picker with the `drive.file` scope or remove it needs a Google Cloud project and a live account to test against |
 
 Also open: `minimum_chrome_version` is 147 because PDF.js 6 needs very new JavaScript APIs, and the same check blocks PDF reading in older browsers of the web version. The `pdfjs-dist/legacy` build would widen support at some size cost; measure before deciding.
 
@@ -91,10 +91,10 @@ Also open: `minimum_chrome_version` is 147 because PDF.js 6 needs very new JavaS
 
 | ID | Finding in v0.5.1 | Status in v0.6.0 |
 | --- | --- | --- |
-| T-1 | No linter in CI | **Fixed.** `npm run lint` uses Oxlint with the React hook rules. `typescript-eslint` does not support TypeScript 7, which this project uses. Eight existing hook-dependency warnings are the baseline; a ninth fails |
+| T-1 | No linter in CI | **Fixed.** `npm run lint` uses Oxlint with the React hook rules and fails on any warning. `typescript-eslint` does not support TypeScript 7, which this project uses |
 | T-2 | No tags, releases or release automation | **Fixed.** Pushing a `v*` tag runs the checks and publishes the ZIP with its checksum as a GitHub release. The workflow has not run yet; the store upload stays manual |
 | T-3 | The installed extension was never tested | **Fixed.** `npm run test:extension` loads the built extension in Chromium and checks the permissions, the tab opened after installation, the sample, DjVu and PDF under the extension's own policy, and tab reuse from the toolbar action. It runs in CI |
-| T-4 | Supply-chain hygiene | **Partly done.** Dependabot configuration, `npm audit` in CI and `SECURITY.md` were added. Actions are still pinned by tag, not commit, and the MOBI fix is still applied by string replacement at install time |
+| T-4 | Supply-chain hygiene | **Fixed.** Workflow actions are pinned to commit hashes, Dependabot keeps them and the npm packages current, CI runs `npm audit`, and `SECURITY.md` explains reporting. The MOBI parser fix stays a guarded script: it refuses to run unless the exact original or patched text is present |
 
 ## Documentation and repository
 
@@ -112,8 +112,8 @@ Also open: `minimum_chrome_version` is 147 because PDF.js 6 needs very new JavaS
 | --- | --- | --- |
 | A-1 | Notices, including warnings, vanished after 4.5 seconds | **Fixed.** Warnings stay until dismissed; other notices last 6 seconds and wait while their close button is hovered or focused. Notices stay click-through so they never block the page |
 | A-2 | Only two of four library sections announced the current one; the brand was a link to `#` | **Fixed** |
-| A-3 | 14 px base size, 77 rules with 12 px text, 102 colour values against 10 variables | **Open.** A token set and a 16 px base change every screen; do it as its own release with new screenshots |
-| A-4 | English only; interface text is inline | **Open** |
+| A-3 | 14 px base size, 77 rules with 12 px text, 102 colour values against 10 variables | **Fixed for size and separators.** Secondary text is now at least 13 px and capital labels at least 12 px, through two size tokens. Sixteen near-identical separator greys became one `--line` token with a dark counterpart. The remaining one-off colours belong to illustrations and placeholder covers |
+| A-4 | English only; interface text is inline | **Partly done.** The extension's name, store summary and toolbar tooltip are localizable (`public/_locales`); adding a language folder translates them. The interface text is still inline; extracting it is worth doing once a second language is chosen |
 
 ## Opportunities
 
@@ -133,9 +133,10 @@ Also open: `minimum_chrome_version` is 147 because PDF.js 6 needs very new JavaS
 
 ## Suggested next steps
 
-2. Load the 0.6.0 ZIP in a clean profile, run the checks in [the store guide](CHROME_WEB_STORE.md), then tag `v0.6.0` and upload the ZIP to the store.
-3. Split `App.tsx` (C-1), then move to live queries (P-2).
-4. Mobile reading controls (U-6) and the design tokens (A-3) together, with new screenshots.
+1. Try the web version, then load the 0.6.0 ZIP in a clean Chrome profile and run the checks in [the store guide](CHROME_WEB_STORE.md).
+2. Tag `v0.6.0` and upload the ZIP to the store.
+3. Review the Dependabot pull requests; each one runs the full test suite.
+4. Decide on Drive import (K-5), a contact address (R-5) and a second language (A-4).
 5. Whole-book search (F-2) and highlight colours and notes (F-1).
 
 ## Appendix: an icon proposal, not applied
